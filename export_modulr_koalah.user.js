@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.1.1
+// @version      0.1.2
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -44,10 +44,35 @@
     else if (/^Mlle\b/i.test(cardName)) civilite = "Mlle";
     else if (/^M\.?\b/i.test(cardName)) civilite = "M";
     let nom = "", prenom = "";
-    const comma = pageTitle.lastIndexOf(",");
-    if (comma > -1) {
-      nom = clean(pageTitle.slice(0, comma).replace(/^\S+\s+/, ""));
-      prenom = clean(pageTitle.slice(comma + 1));
+    // Source prioritaire : la vCard Modulr, beaucoup plus propre que le h1 qui peut contenir
+    // des libellés/boutons ajoutés par d'autres scripts.
+    const identity = cardName.replace(/^(Mme|Mlle|M\.?)(\s+)/i, "");
+    if (identity) {
+      const upperTail = identity.match(/^(.*?)(\s+)([A-ZÀ-ÖØ-Ý][A-ZÀ-ÖØ-Ý' -]+)$/);
+      if (upperTail) {
+        prenom = clean(upperTail[1]);
+        nom = clean(upperTail[3]);
+      } else {
+        const commaV = identity.lastIndexOf(",");
+        if (commaV > -1) {
+          nom = clean(identity.slice(0, commaV));
+          prenom = clean(identity.slice(commaV + 1));
+        } else {
+          const bits = identity.split(/\s+/);
+          prenom = bits.shift() || "";
+          nom = bits.join(" ");
+        }
+      }
+    }
+    // Fallback uniquement si la vCard ne suffit pas.
+    if ((!nom || !prenom) && pageTitle) {
+      const comma = pageTitle.lastIndexOf(",");
+      if (comma > -1) {
+        const left = clean(pageTitle.slice(0, comma));
+        const right = clean(pageTitle.slice(comma + 1));
+        if (!nom) nom = left;
+        if (!prenom) prenom = right;
+      }
     }
     const addressLines = (doc.querySelector("#address_block_1 .address_block_content")?.innerText || "").split(/\n+/).map(clean).filter(Boolean);
     let codePostal = "", ville = "";
@@ -147,36 +172,107 @@
     for(const name of names){
       const byName=root.querySelector('[name="'+CSS.escape(name)+'"]'); if(byName) return byName;
       const byId=root.querySelector("#"+CSS.escape(name)); if(byId) return byId;
+      const byAria=root.querySelector('[aria-label="'+CSS.escape(name)+'"]'); if(byAria) return byAria;
     }
     const wanted=labels.map(norm);
     for(const label of root.querySelectorAll("label")){
       const t=norm(label.textContent);
       if(!wanted.some(w=>t===w||t.includes(w))) continue;
       if(label.htmlFor){ const linked=document.getElementById(label.htmlFor); if(linked) return linked; }
-      const inside=label.querySelector("input,select,textarea")||label.parentElement?.querySelector("input,select,textarea");
+      const inside=label.querySelector("input,select,textarea,button,[role=combobox],[role=radio]")||label.parentElement?.querySelector("input,select,textarea,button,[role=combobox],[role=radio]");
       if(inside) return inside;
+    }
+    // fallback par proximité textuelle
+    for(const el of root.querySelectorAll("input,select,textarea,button,[role=combobox],[role=radio]")){
+      const around=norm(el.getAttribute("aria-label")||el.getAttribute("placeholder")||el.closest("div")?.textContent||"");
+      if(wanted.some(w=>around.includes(w))) return el;
     }
     return null;
   }
 
-  function setNative(el,value) {
-    if(!el||value==null||value==="") return false;
-    if(el.tagName==="SELECT"){
-      const wanted=norm(value);
-      const opt=[...el.options].find(o=>norm(o.value)===wanted||norm(o.textContent)===wanted||norm(o.textContent).includes(wanted));
-      if(!opt) return false;
-      el.value=opt.value;
-    } else {
-      const proto=el.tagName==="TEXTAREA"?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
-      const setter=Object.getOwnPropertyDescriptor(proto,"value")?.set;
-      if(setter) setter.call(el,value); else el.value=value;
-    }
-    el.dispatchEvent(new Event("input",{bubbles:true}));
-    el.dispatchEvent(new Event("change",{bubbles:true}));
+  function clickChoiceByText(root,value) {
+    const wanted=norm(value);
+    const aliases = {
+      "m":["m","mr","monsieur"],
+      "mme":["mme","madame"],
+      "mlle":["mlle","mademoiselle"],
+      "individuel":["individuel","indiv"],
+      "famille":["famille","familial"]
+    };
+    const candidates=aliases[wanted]||[wanted];
+    const nodes=[...root.querySelectorAll('button,[role="radio"],[role="option"],label')];
+    const target=nodes.find(n=>{
+      const t=norm(n.textContent);
+      return candidates.some(a=>t===a||t.startsWith(a+" ")||t.includes(" "+a+" "));
+    });
+    if(!target) return false;
+    target.click();
+    target.dispatchEvent(new Event("change",{bubbles:true}));
     return true;
   }
 
-  function fill(names,labels,value,root=document){ if(!value) return true; return setNative(findControl(names,labels,root),value); }
+  function setNative(el,value,root=document) {
+    if(!el||value==null||value==="") return false;
+    const wanted=norm(value);
+
+    if(el.matches('input[type="radio"]')){
+      const name=el.name;
+      const radios=name?[...root.querySelectorAll('input[type="radio"][name="'+CSS.escape(name)+'"]')]:[el];
+      const aliases=wanted==="m"?["m","mr","monsieur"]:wanted==="mme"?["mme","madame"]:wanted==="individuel"?["individuel","indiv"]:wanted==="famille"?["famille","familial"]:[wanted];
+      const radio=radios.find(r=>{
+        const txt=norm(r.value+" "+(r.closest("label")?.textContent||""));
+        return aliases.some(a=>txt.includes(a));
+      });
+      if(radio){
+        radio.click();
+        radio.dispatchEvent(new Event("input",{bubbles:true}));
+        radio.dispatchEvent(new Event("change",{bubbles:true}));
+        return true;
+      }
+      return clickChoiceByText(root,value);
+    }
+
+    if(el.tagName==="SELECT"){
+      const aliases=wanted==="m"?["m","mr","monsieur"]:wanted==="mme"?["mme","madame"]:wanted==="individuel"?["individuel","indiv"]:wanted==="famille"?["famille","familial"]:[wanted];
+      const opt=[...el.options].find(o=>{
+        const txt=norm(o.value+" "+o.textContent);
+        return aliases.some(a=>txt===a||txt.includes(a));
+      });
+      if(!opt) return false;
+      el.value=opt.value;
+      el.dispatchEvent(new Event("input",{bubbles:true}));
+      el.dispatchEvent(new Event("change",{bubbles:true}));
+      return true;
+    }
+
+    if(el.matches('button,[role="radio"]')){
+      if(clickChoiceByText(root,value)) return true;
+    }
+
+    if(el.matches('[role="combobox"]')){
+      el.click();
+      const optionRoot=document;
+      const option=[...optionRoot.querySelectorAll('[role="option"],li,button')].find(o=>{
+        const t=norm(o.textContent);
+        return t===wanted||t.includes(wanted);
+      });
+      if(option){ option.click(); return true; }
+    }
+
+    if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"){
+      const proto=el.tagName==="TEXTAREA"?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
+      const setter=Object.getOwnPropertyDescriptor(proto,"value")?.set;
+      if(setter) setter.call(el,value); else el.value=value;
+      el.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"insertText",data:String(value)}));
+      el.dispatchEvent(new Event("change",{bubbles:true}));
+      el.dispatchEvent(new Event("blur",{bubbles:true}));
+      return true;
+    }
+
+    return clickChoiceByText(root,value);
+  }
+
+  function fill(names,labels,value,root=document){ if(!value) return true; return setNative(findControl(names,labels,root),value,root); }
   function section(regex){ const h=[...document.querySelectorAll("h1,h2,h3,h4,h5,legend,[role=heading]")].find(x=>regex.test(clean(x.textContent))); return h?(h.closest("fieldset,section,article,div")||h.parentElement):null; }
   function fillPerson(person,prefix,root){ if(!person) return []; return [fill([prefix+"civilite"],["Civilité"],person.civilite,root),fill([prefix+"nom"],["Nom"],person.nom,root),fill([prefix+"prenom"],["Prénom"],person.prenom,root),fill([prefix+"dateNaissance"],["Date de naissance"],person.dateNaissance,root),fill([prefix+"lieuNaissance"],["Lieu de naissance","Ville de naissance"],person.lieuNaissance,root)]; }
 
