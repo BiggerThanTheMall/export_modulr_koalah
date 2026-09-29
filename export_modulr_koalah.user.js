@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.1.0
+// @version      0.1.1
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
-// @match        https://plateforme.ltoa-assurances.fr/clients/nouveau*
+// @match        https://plateforme.ltoa-assurances.fr/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
@@ -219,8 +219,32 @@
       b.id="ltoa-k-btn"; b.textContent="Exporter vers Koalah"; b.onclick=openReview; document.body.appendChild(b); return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
-      const raw=await GM_getValue(STORE,""); if(!raw) return;
-      try{ await sleep(500); await importIntoKoalah(JSON.parse(raw)); }catch(e){ console.error("[LTOA Modulr → Koalah]",e); }
+      const raw=await GM_getValue(STORE,""); 
+      if(!raw) return;
+
+      // Si Koalah impose une authentification, on conserve l'import en attente.
+      // Une fois connecté, dès qu'une page authentifiée est atteinte, on revient automatiquement
+      // sur /clients/nouveau pour reprendre l'import.
+      const isLoginPage =
+        !!document.querySelector('input[type="password"]') ||
+        /\/(login|connexion|signin|auth)(\/|$)/i.test(location.pathname);
+
+      if(isLoginPage) {
+        console.info("[LTOA Modulr → Koalah] Authentification Koalah requise. Import conservé en attente.");
+        return;
+      }
+
+      if(!location.pathname.startsWith("/clients/nouveau")){
+        location.replace(KOALAH_NEW);
+        return;
+      }
+
+      try{
+        await sleep(700);
+        await importIntoKoalah(JSON.parse(raw));
+      }catch(e){
+        console.error("[LTOA Modulr → Koalah]",e);
+      }
     }
   }
   init();
