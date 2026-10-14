@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.3.6
+// @version      0.3.8
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -699,6 +699,22 @@
   }
 
   function injectEstimateButtons(){
+    // A persistent entry point in the Devis tab, even without a visible GRC row.
+    const devisTab=document.querySelector(".entity_info_block_1");
+    if(devisTab&&!devisTab.querySelector("#ltoa-k-devis-action")){
+      const heading=[...devisTab.querySelectorAll("h2")].find(h=>norm(h.textContent)==="devis");
+      const wrapper=heading?.parentElement;
+      if(wrapper){
+        const b=document.createElement("button");
+        b.id="ltoa-k-devis-action";
+        b.type="button";
+        b.className="ltoa-k-row-btn";
+        b.style.cssText="margin:0 10px;vertical-align:middle";
+        b.innerHTML='<img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><span>Exporter vers KOALAH</span>';
+        b.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openReview().catch(console.error);});
+        wrapper.appendChild(b);
+      }
+    }
     const rows=document.querySelectorAll('.entity_info_block_1 tr[data-class_name="EstimateData"][data-entity_id]');
     for(const row of rows){
       if(row.querySelector(".ltoa-k-row-btn"))continue;
@@ -725,6 +741,9 @@
         let timer;
         new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(injectEstimateButtons,250);}).observe(target,{childList:true,subtree:true});
       }
+      // On some ModulR cards the Devis tab is mounted after document-idle.
+      let tries=0;
+      const retry=setInterval(()=>{injectEstimateButtons();if(++tries>=15)clearInterval(retry);},1200);
       return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
