@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.5
+// @version      0.2.6
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -374,7 +374,7 @@
   function valueOf(el){
     if(!el)return "";
     if(el.matches("input[type=checkbox],input[type=radio]"))return el.checked?el.value:"";
-    return clean(el.value||el.textContent||"");
+    return el.matches("input,select,textarea")?clean(el.value):clean(el.textContent||"");
   }
   function writeField(label,value){
     const el=field(label);
