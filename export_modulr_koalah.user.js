@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.3.4
+// @version      0.3.5
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -235,12 +235,16 @@
       if(typeContrat==="Famille") selected=[...overlay.querySelectorAll(".ltoa-member:checked")].map(x=>family[Number(x.dataset.i)]);
       const payload={source:{modulrClientId:principal.modulrId,url:location.href},typeContrat,principal,conjoint:selected.find(x=>x.relation==="Conjoint")||null,enfants:selected.filter(x=>x.relation==="Enfant")};
       const token=TOKEN_PREFIX+Date.now()+"_"+Math.random().toString(36).slice(2);
-      const tab=window.open(KOALAH_NEW,token);
+      // Store before opening so a fast-loading KOALAH tab can read its import.
+      await GM_setValue(STORE,JSON.stringify({token,created:Date.now(),payload}));
+      // _blank gives the tab a standard browsing context; only an opaque,
+      // short-lived identifier is passed (never client information).
+      const tab=window.open(KOALAH_NEW+"#"+encodeURIComponent(token),"_blank");
       if(!tab){
+        await GM_deleteValue(STORE);
         overlay.querySelector("#ltoa-send").textContent="Autorisez l'ouverture du nouvel onglet puis réessayez";
         return;
       }
-      await GM_setValue(STORE,JSON.stringify({token,created:Date.now(),payload}));
       overlay.remove();
     };
   }
@@ -703,16 +707,18 @@
       return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
-      const name=String(window.name||"");
-      // Only the tab opened by the exporter may consume an import.
-      if(!name.startsWith(TOKEN_PREFIX))return;
+      const token=decodeURIComponent(location.hash.slice(1));
+      // A normal KOALAH visit has no export token and must never start an import.
+      if(!token.startsWith(TOKEN_PREFIX))return;
+      // Hide the temporary token immediately; preserve current path/query.
+      history.replaceState(history.state,"",location.pathname+location.search);
       let raw=await GM_getValue(STORE,"");
       // The new tab can load before Tampermonkey finishes storing the payload.
       for(let i=0;i<15&&!raw;i++){await sleep(200);raw=await GM_getValue(STORE,"");}
       if(!raw)return;
       let pending;
       try{pending=JSON.parse(raw);}catch(_){await GM_deleteValue(STORE);return;}
-      if(!pending||pending.token!==name)return;
+      if(!pending||pending.token!==token)return;
       if(Date.now()-pending.created>MAX_IMPORT_AGE){await GM_deleteValue(STORE);return;}
       // Authenticate normally if needed; never force the app away from its login screen.
       if(document.querySelector('input[type="password"]')||/\/(login|connexion|signin|auth)(\/|$)/i.test(location.pathname))return;
