@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.4.5
+// @version      0.4.6
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -638,11 +638,11 @@
       }
       const next=nextButton();
       if(!next){showPause("Bouton Suivant introuvable à l'étape "+step+".");return;}
-      if(Date.now()-wizardState.lastAction<1500)return;
+      if(Date.now()-wizardState.lastAction<450)return;
       // Do not navigate away while the user is still typing (React fields update per keystroke).
-      if(Date.now()-wizardState.lastUserInput<1600)return;
+      if(Date.now()-wizardState.lastUserInput<450)return;
       const focused=document.activeElement;
-      if(focused&&focused.matches("main input:not([type=hidden]),main textarea")&&Date.now()-wizardState.lastUserInput<3000)return;
+      if(focused&&focused.matches('main input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),main textarea')&&Date.now()-wizardState.lastUserInput<750)return;
       wizardState.lastAction=Date.now();
       showPause("Étape "+step+" complète : passage à la suite...");
       next.click();
@@ -661,16 +661,16 @@
     const request=()=>{
       if(wizardState.finished)return;
       clearTimeout(timer);
-      timer=setTimeout(()=>advanceWizard(payload),350);
+      timer=setTimeout(()=>advanceWizard(payload),100);
     };
     const observer=new MutationObserver(request);
     observer.observe(document.querySelector("main")||document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["value","aria-pressed","disabled"]});
-    document.addEventListener("input",e=>{if(e.isTrusted)wizardState.lastUserInput=Date.now();highlightMissingFields();request();},true);
+    document.addEventListener("input",e=>{if(e.isTrusted&&e.target?.matches?.('input:not([type="radio"]):not([type="checkbox"]),textarea'))wizardState.lastUserInput=Date.now();highlightMissingFields();request();},true);
     document.addEventListener("change",()=>{highlightMissingFields();request();},true);
     document.addEventListener("click",request,true);
     // Poll as a fallback when React only updates properties, or native date input
     // and button transitions do not emit the expected DOM mutations.
-    const poll=setInterval(()=>{highlightMissingFields();if(wizardState.finished){clearInterval(poll);observer.disconnect();return;}advanceWizard(payload);},1800);
+    const poll=setInterval(()=>{highlightMissingFields();if(wizardState.finished){clearInterval(poll);observer.disconnect();return;}advanceWizard(payload);},400);
     request();
   }
 
