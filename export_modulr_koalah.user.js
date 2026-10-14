@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.0
+// @version      0.2.1
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -89,9 +89,39 @@
       paysNaissance:valueByLabel(doc,"Pays de naissance"),
       nationalite:valueByLabel(doc,"Nationalité"),
       situationFamiliale:valueByLabel(doc,"Situation matrimoniale"),
+      regimeSocial:valueByLabel(doc,"Régime social") || valueByLabel(doc,"Statut professionnel") || valueByLabel(doc,"Profession"),
       adresse:addressLines[0] || "", codePostal, ville, telephone:tel,
       email:emailEl ? clean(emailEl.getAttribute("title")) : ""
     };
+  }
+
+
+  // Read only text currently present in ModulR. A blank is not evidence of "Non".
+  function descriptions(doc){
+    const nodes=[...doc.querySelectorAll('[class*="description"],[id*="description"],[class*="contract"],[class*="devis"],textarea')];
+    return [...new Set(nodes.map(n=>clean(n.value||n.innerText||n.textContent)).filter(t=>t.length>5&&t.length<15000))].join("\n");
+  }
+  function inferFromDescription(text){
+    const lines=String(text||"").split(/\n|[;|]/).map(clean);
+    let pays="",couverture="";
+    for(const line of lines){
+      let m=line.match(/(?:pays\s*(?:de\s*)?(?:rapatriement|destination)|rapatriement\s*(?:vers|en|au)|destination)\s*[:\-]?\s*([A-Za-zÀ-ÿ' -]{3,45})/i);
+      if(m&&!pays)pays=clean(m[1]);
+      if(/(?:assur[ée]|couvert|assurance).{0,45}(?:12 derniers mois|douze derniers mois|12 mois)/i.test(line)){
+        if(/\b(non|pas|aucun|jamais)\b/i.test(line))couverture="Non";
+        else if(/\b(oui|deja|déjà|actuellement)\b/i.test(line))couverture="Oui";
+      }
+    }
+    return {paysRapatriement:pays,assure12Mois:couverture};
+  }
+  function askMissing(promptLabel,defaultValue=""){
+    const answer=window.prompt(promptLabel,defaultValue);
+    return answer===null?null:clean(answer);
+  }
+  function regimeFromModulr(value){
+    const v=norm(value);
+    if(/\b(tns|travailleur non salarie|independant|independants|rsi|ssi|msa|agricole|fonction publique|fonctionnaire|regime special)\b/.test(v))return clean(value);
+    return "Sécurité sociale";
   }
 
   function familyLinks(doc) {
@@ -135,6 +165,10 @@
 
   async function openReview() {
     const principal=parsePerson(document), links=familyLinks(document);
+    const fromDescription=inferFromDescription(descriptions(document));
+    principal.paysRapatriement=fromDescription.paysRapatriement;
+    principal.assure12Mois=fromDescription.assure12Mois;
+    principal.regimeSocialKoalah=regimeFromModulr(principal.regimeSocial);
     const btn=document.getElementById("ltoa-k-btn");
     btn.disabled=true; btn.textContent="Analyse famille...";
     const family=await Promise.all(links.map(loadRelative));
@@ -159,6 +193,16 @@
     overlay.querySelector("#ltoa-cancel").onclick=()=>overlay.remove();
     overlay.querySelector("#ltoa-send").onclick=async()=>{
       const typeContrat=overlay.querySelector('input[name="ltoa-type"]:checked').value;
+      if(!principal.paysRapatriement){
+        const answer=askMissing("Pays de rapatriement : non identifié dans les descriptions ModulR. Indique le pays (ou laisse vide pour compléter sur KOALAH).");
+        if(answer===null)return;
+        principal.paysRapatriement=answer;
+      }
+      if(!principal.assure12Mois){
+        const answer=askMissing("Assuré durant les 12 derniers mois ? Indique Oui ou Non (ou laisse vide pour répondre sur KOALAH).");
+        if(answer===null)return;
+        principal.assure12Mois=/^oui$/i.test(answer)?"Oui":/^non$/i.test(answer)?"Non":"";
+      }
       let selected=[];
       if(typeContrat==="Famille") selected=[...overlay.querySelectorAll(".ltoa-member:checked")].map(x=>family[Number(x.dataset.i)]);
       const payload={source:{modulrClientId:principal.modulrId,url:location.href},typeContrat,principal,conjoint:selected.find(x=>x.relation==="Conjoint")||null,enfants:selected.filter(x=>x.relation==="Enfant")};
@@ -359,11 +403,13 @@
       ["Téléphone",p.telephone],["Adresse",p.adresse],
       ["Code postal",p.codePostal],["Ville",p.ville],
       ["Situation familiale",p.situationFamiliale],
-      ["Situation matrimoniale",p.situationFamiliale]
+      ["Situation matrimoniale",p.situationFamiliale],
+      ["Régime social",p.regimeSocialKoalah],
+      ["Régime de sécurité sociale",p.regimeSocialKoalah],
+      ["Régime obligatoire",p.regimeSocialKoalah]
     ];
     for(const [key,val] of pairs)writeField(key,val);
-    // A senior's social security regime is a product rule; do not infer
-    // an age threshold from the interface. The threshold needs confirmation.
+    // Sécurité sociale par défaut à tout âge ; exception explicite ModulR.
   }
   function fillStep3(payload){
     // Step 3 is deliberately non-submitting. The client chooses funeral capital.
