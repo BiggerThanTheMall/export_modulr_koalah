@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.3.3
+// @version      0.3.4
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -432,6 +432,21 @@
   function showPause(message){
     const status=document.querySelector("#ltoa-k-status");
     if(status)status.textContent=message;
+    const step=Math.max(1,Math.min(3,wizardStep()||wizardState.step||1));
+    const progress=document.querySelector("#ltoa-k-progress");
+    if(progress)progress.style.width=(step===3?100:(step-1)*33.33)+"%";
+    const stepLabel=document.querySelector("#ltoa-k-step");
+    if(stepLabel)stepLabel.textContent="Étape "+step+" / 3";
+    const missing=document.querySelector("#ltoa-k-missing-list");
+    if(missing){
+      const empty=[...document.querySelectorAll("main .ltoa-k-missing")].slice(0,4).map(el=>{
+        const label=el.closest("div")?.querySelector("label")?.textContent||el.getAttribute("aria-label")||"Champ requis";
+        return clean(label).replace(/\*/g,"");
+      });
+      const radio=document.querySelector('main input[name="aAssuranceDerniers12Mois"]:checked');
+      if(step===3&&!radio)empty.push("Assurance obsèques : Oui / Non");
+      missing.textContent=empty.length?"À compléter : "+[...new Set(empty)].join(" · "):"Champs obligatoires vérifiés";
+    }
   }
   async function fillStep1(p){
     // Change one React-controlled field per render to avoid stale state resets.
@@ -471,8 +486,7 @@
     const situationMap={"celibataire":"Celibataire","celibataire(e)":"Celibataire","concubin":"Concubin","concubin(e)":"Concubin","pacse":"Pacse","pacse(e)":"Pacse","marie":"Marie","marie(e)":"Marie","veuf":"Veuf","veuve":"Veuf","veuf / veuve":"Veuf","divorce":"Divorce","divorce(e)":"Divorce"};
     const status=[...document.querySelectorAll("main select")].find(el=>[...el.options].some(o=>o.value==="Marie")&&[...el.options].some(o=>o.value==="Celibataire"));
     if(status&&visible(status)&&!status.value){
-      const key=situationMap[situation]||Object.keys(situationMap).find(k=>situation.startsWith(k));
-      const mapped=situationMap[key];
+      const mapped=situationMap[situation]||situationMap[Object.keys(situationMap).find(k=>situation.startsWith(k))]||"";
       if(mapped)setNative(status,mapped);
     }
     // Default to general Social Security; an explicit ModulR exception overrides.
@@ -594,7 +608,9 @@
     const response=norm(p.assure12Mois);
     if(response==="oui"||response==="non"){
       const radio=document.querySelector('main input[type="radio"][name="aAssuranceDerniers12Mois"][value="'+response+'"]');
-      if(radio&&!radio.checked){radio.click();radio.dispatchEvent(new Event("change",{bubbles:true}));}
+      if(radio&&!radio.checked)radio.click();
+      await sleep(120);
+      if(radio&&!radio.checked)showPause("Assurance obsèques 12 mois : sélection non confirmée.");
     }
     highlightMissingFields();
     showPause("Données famille importées. Champs obligatoires encore vides en rouge : complétez-les et choisissez le capital obsèques. Aucune validation automatique.");
@@ -638,7 +654,7 @@
     injectStyle();
     const banner=document.createElement("div");
     banner.id="ltoa-k-banner";
-    banner.innerHTML="<b>Import Modulr → KOALAH</b> — "+esc(payload.principal.prenom)+" "+esc(payload.principal.nom)+" · "+esc(payload.typeContrat)+'<br><span id="ltoa-k-status">Initialisation des étapes...</span>';
+    banner.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px"><b>Import KOALAH</b><span id="ltoa-k-step">Étape 1 / 3</span></div><div style="height:5px;background:#e2e8f0;border-radius:6px;margin:8px 0;overflow:hidden"><div id="ltoa-k-progress" style="height:100%;width:0%;background:#2563eb;transition:width .35s"></div></div><div style="font-weight:600">'+esc(payload.principal.prenom)+" "+esc(payload.principal.nom)+'</div><span id="ltoa-k-missing-list"></span><span id="ltoa-k-status">Initialisation...</span>';
     document.body.appendChild(banner);
     let timer;
     const request=()=>{
