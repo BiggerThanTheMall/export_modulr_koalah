@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.4.2
+// @version      0.4.3
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -712,7 +712,7 @@
     return button;
   }
   function injectEstimateButtons(){
-    if(!/clients_card\\.php/i.test(location.pathname))return;
+    if(!location.pathname.includes("/clients_card.php"))return;
     // ModulR mounts the Devis table in different wrappers depending on layout.
     const rows=document.querySelectorAll('tr[data-class_name="EstimateData"][data-entity_id]');
     for(const row of rows){
