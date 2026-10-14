@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.4.3
+// @version      0.4.4
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -236,37 +236,13 @@
       if(typeContrat==="Famille") selected=[...overlay.querySelectorAll(".ltoa-member:checked")].map(x=>family[Number(x.dataset.i)]);
       const payload={source:{modulrClientId:principal.modulrId,url:location.href},typeContrat,principal,conjoint:selected.find(x=>x.relation==="Conjoint")||null,enfants:selected.filter(x=>x.relation==="Enfant")};
       const token=TOKEN_PREFIX+Date.now()+"_"+Math.random().toString(36).slice(2);
-      const send=overlay.querySelector("#ltoa-send");
-      send.disabled=true;
-      send.textContent="Transfert vers l'onglet KOALAH...";
-      // Reuse an already authenticated KOALAH tab via the Tampermonkey cross-tab
-      // value listener; never open a fresh authentication context.
+      const tab=window.open(KOALAH_NEW+"#"+encodeURIComponent(token),"_blank");
+      if(!tab){
+        overlay.querySelector("#ltoa-send").textContent="Autorisez les fenêtres pop-up puis réessayez";
+        return;
+      }
       await GM_setValue(STORE,JSON.stringify({token,created:Date.now(),payload}));
-      let confirmed=false;
-      const ackKey=STORE+"_ack_"+token;
-      for(let attempt=0;attempt<20;attempt++){
-        await sleep(250);
-        if(await GM_getValue(ackKey,false)){confirmed=true;break;}
-      }
-      if(confirmed){
-        overlay.remove();
-        const notice=document.createElement("div");
-        notice.id="ltoa-k-transfer-notice";
-        notice.style.cssText="position:fixed;right:20px;bottom:20px;z-index:999999;background:#193552;color:white;padding:12px 16px;border-radius:10px;box-shadow:0 7px 22px #0003;font:600 13px Arial,sans-serif";
-        notice.textContent="Import transmis. Revenez dans votre onglet KOALAH déjà connecté.";
-        document.body.appendChild(notice);
-        setTimeout(()=>notice.remove(),9000);
-      }else{
-        // Preserve the user's edited review; do not fall back to opening /login.
-        await GM_deleteValue(STORE);
-        send.disabled=false;
-        send.textContent="Réessayer le transfert";
-        const warn=overlay.querySelector("#ltoa-k-no-tab")||document.createElement("p");
-        warn.id="ltoa-k-no-tab";
-        warn.className="ltoa-warn";
-        warn.textContent="Aucun onglet KOALAH actif n'a répondu. Ouvrez KOALAH manuellement, connectez-vous si nécessaire, actualisez cet onglet une fois, puis réessayez.";
-        send.parentElement.before(warn);
-      }
+      overlay.remove();
     };
   }
 
@@ -743,22 +719,6 @@
       return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
-      // Listen even on a normal authenticated KOALAH tab with no import URL.
-      // This allows ModulR to hand off the job without opening /login.
-      GM_addValueChangeListener(STORE,async(_key,_old,value,remote)=>{
-        if(!remote||!value)return;
-        let task;
-        try{task=JSON.parse(value);}catch(_){return;}
-        if(!task?.token||Date.now()-task.created>MAX_IMPORT_AGE)return;
-        if(document.querySelector('input[type="password"]')||["/login","/connexion","/signin","/auth"].some(p=>location.pathname===p||location.pathname.startsWith(p+"/")))return;
-        const ackKey=STORE+"_ack_"+task.token;
-        if(await GM_getValue(ackKey,false))return;
-        await GM_setValue(ackKey,true);
-        if(location.pathname==="/clients/nouveau"){
-          // Load the token in this existing tab; its authentication context stays intact.
-          location.assign(KOALAH_NEW+"#"+encodeURIComponent(task.token));
-        }else location.assign(KOALAH_NEW+"#"+encodeURIComponent(task.token));
-      });
       const token=decodeURIComponent(location.hash.slice(1));
       // A normal KOALAH visit has no export token and must never start an import.
       if(!token.startsWith(TOKEN_PREFIX))return;
