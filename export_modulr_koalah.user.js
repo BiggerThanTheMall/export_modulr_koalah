@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.2
+// @version      0.2.3
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -33,6 +33,33 @@
       }
     }
     return "";
+  }
+
+  function readBirthDate(doc){
+    const valid=(v)=>{
+      const text=clean(v);
+      const iso=text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+      if(iso)return iso[0];
+      const fr=text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\b/);
+      return fr?fr[3]+"-"+fr[2].padStart(2,"0")+"-"+fr[1].padStart(2,"0"):"";
+    };
+    const fromLabel=valid(valueByLabel(doc,"Date de naissance"));
+    if(fromLabel)return fromLabel;
+    const candidates=[...doc.querySelectorAll("input, time, [data-field], [data-name], .car_template_field, .card_template_field, dt, dd, tr")];
+    for(const node of candidates){
+      const key=norm([node.getAttribute("name"),node.id,node.getAttribute("data-field"),node.getAttribute("data-name"),node.getAttribute("aria-label"),node.tagName==="INPUT"?node.closest("div")?.textContent:node.textContent].filter(Boolean).join(" "));
+      if(!/(date de naissance|date_naissance|datenaissance|birthdate|datebirth|date-de-naissance)/.test(key))continue;
+      const elems=[node,node.querySelector("input"),node.querySelector("time"),node.nextElementSibling];
+      for(const el of elems){
+        if(!el)continue;
+        const value=valid(el.value||el.getAttribute?.("datetime")||el.textContent);
+        if(value)return value;
+      }
+    }
+    // Last resort: scoped text pattern, never guess unrelated dates.
+    const body=doc.body?.innerText||doc.body?.textContent||"";
+    const match=body.match(/date\s+de\s+naissance\s*[:\-]?\s*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}|\d{4}-\d{2}-\d{2})/i);
+    return match?valid(match[1]):"";
   }
 
   function parsePerson(doc, explicitId = "") {
@@ -84,7 +111,7 @@
     const emailEl = [...doc.querySelectorAll("a[title]")].find(a => /@/.test(a.getAttribute("title") || ""));
     return {
       modulrId:id, civilite, nom, prenom,
-      dateNaissance:valueByLabel(doc,"Date de naissance"),
+      dateNaissance:readBirthDate(doc),
       lieuNaissance:valueByLabel(doc,"Ville de naissance"),
       paysNaissance:valueByLabel(doc,"Pays de naissance"),
       nationalite:valueByLabel(doc,"Nationalité"),
