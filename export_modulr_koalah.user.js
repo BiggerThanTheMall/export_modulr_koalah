@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.6
+// @version      0.2.7
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -211,18 +211,21 @@
 
     const overlay=document.createElement("div");
     overlay.id="ltoa-k-overlay";
-    overlay.innerHTML='<div id="ltoa-k-modal"><h2>Export Modulr → Koalah</h2><h3>Client principal</h3><div class="ltoa-grid"><div><b>Identité</b><br>'+esc(principal.civilite)+' '+esc(principal.prenom)+' '+esc(principal.nom)+'</div><div><b>Naissance</b><br>'+esc(principal.dateNaissance||"Non renseignée")+' '+esc(principal.lieuNaissance||"")+'</div><div><b>Coordonnées</b><br>'+esc(principal.telephone||"—")+'<br>'+esc(principal.email||"—")+'</div><div><b>Adresse</b><br>'+esc(principal.adresse||"—")+'<br>'+esc(principal.codePostal)+' '+esc(principal.ville)+'</div></div><h3>Informations du contrat</h3><div class="ltoa-extra"><label>Pays de rapatriement <input id="ltoa-pays" type="text" placeholder="À renseigner" value="'+esc(principal.paysRapatriement||"")+'"><small>Détection dans les descriptions ModulR, modifiable</small></label><label>Assuré au cours des 12 derniers mois ? <select id="ltoa-12mois"><option value="">À préciser</option><option value="Oui" '+(principal.assure12Mois==="Oui"?"selected":"")+'>Oui</option><option value="Non" '+(principal.assure12Mois==="Non"?"selected":"")+'>Non</option></select><small>Choix manuel si description inconnue</small></label></div><h3>Type Koalah</h3><label style="margin-right:24px"><input type="radio" name="ltoa-type" value="Individuel" '+(family.length?"":"checked")+'> Individuel</label><label><input type="radio" name="ltoa-type" value="Famille" '+(family.length?"checked":"")+'> Famille</label><div id="ltoa-family"><h3>Famille détectée dans Modulr</h3>'+familyHtml+'</div><p class="ltoa-warn">Les champs spécifiques au devis Koalah absents de Modulr resteront à vérifier dans Koalah.</p><div class="ltoa-actions"><button id="ltoa-cancel">Annuler</button><button id="ltoa-send" class="ltoa-primary">Continuer vers Koalah</button></div></div>';
+    overlay.innerHTML='<div id="ltoa-k-modal"><h2>Export Modulr → Koalah</h2><h3>Client principal</h3><div class="ltoa-grid"><div><b>Identité</b><br>'+esc(principal.civilite)+' '+esc(principal.prenom)+' '+esc(principal.nom)+'</div><div><b>Naissance</b><br>'+esc(principal.dateNaissance||"Non renseignée")+' '+esc(principal.lieuNaissance||"")+'</div><div><b>Coordonnées</b><br>'+esc(principal.telephone||"—")+'<br>'+esc(principal.email||"—")+'</div><div><b>Adresse</b><br>'+esc(principal.adresse||"—")+'<br>'+esc(principal.codePostal)+' '+esc(principal.ville)+'</div></div><h3>Informations à compléter</h3><div class="ltoa-extra"><label>Lieu de naissance <input id="ltoa-naissance" type="text" placeholder="Ville de naissance" value="'+esc(principal.lieuNaissance||"") +'"><small>Récupéré de ModulR, modifiable avant export</small></label><label>Pays de rapatriement <input id="ltoa-pays" type="text" placeholder="À renseigner" value="'+esc(principal.paysRapatriement||"")+'"><small>Détection dans les descriptions ModulR, modifiable</small></label><label>Assuré au cours des 12 derniers mois ? <select id="ltoa-12mois"><option value="">À préciser</option><option value="Oui" '+(principal.assure12Mois==="Oui"?"selected":"")+'>Oui</option><option value="Non" '+(principal.assure12Mois==="Non"?"selected":"")+'>Non</option></select><small>Choix manuel si description inconnue</small></label></div><h3>Type Koalah</h3><label style="margin-right:24px"><input type="radio" name="ltoa-type" value="Individuel" '+(family.length?"":"checked")+'> Individuel</label><label><input type="radio" name="ltoa-type" value="Famille" '+(family.length?"checked":"")+'> Famille</label><div id="ltoa-family"><h3>Famille détectée dans Modulr</h3>'+familyHtml+'</div><p class="ltoa-warn">Les champs spécifiques au devis Koalah absents de Modulr resteront à vérifier dans Koalah.</p><div class="ltoa-actions"><button id="ltoa-cancel">Annuler</button><button id="ltoa-send" class="ltoa-primary">Continuer vers Koalah</button></div></div>';
     document.body.appendChild(overlay);
 
     const refresh=()=>{ const type=overlay.querySelector('input[name="ltoa-type"]:checked').value; overlay.querySelector("#ltoa-family").style.display=type==="Famille"?"block":"none"; };
     overlay.querySelectorAll('input[name="ltoa-type"]').forEach(r=>r.addEventListener("change",refresh)); refresh();
-    const updateExtra=()=>{for(const el of [overlay.querySelector("#ltoa-pays"),overlay.querySelector("#ltoa-12mois")]){el.classList.toggle("ltoa-complete",!!clean(el.value));el.classList.toggle("ltoa-missing",!clean(el.value));}};
+    const updateExtra=()=>{for(const el of [overlay.querySelector("#ltoa-naissance"),overlay.querySelector("#ltoa-pays"),overlay.querySelector("#ltoa-12mois")]){el.classList.toggle("ltoa-complete",!!clean(el.value));el.classList.toggle("ltoa-missing",!clean(el.value));}};
+    overlay.querySelector("#ltoa-naissance").addEventListener("input",updateExtra);
     overlay.querySelector("#ltoa-pays").addEventListener("input",updateExtra);
     overlay.querySelector("#ltoa-12mois").addEventListener("change",updateExtra);
     updateExtra();
     overlay.querySelector("#ltoa-cancel").onclick=()=>overlay.remove();
     overlay.querySelector("#ltoa-send").onclick=async()=>{
       const typeContrat=overlay.querySelector('input[name="ltoa-type"]:checked').value;
+      principal.lieuNaissance=clean(overlay.querySelector("#ltoa-naissance").value);
+      if(!principal.lieuNaissance){overlay.querySelector("#ltoa-naissance").focus();updateExtra();return;}
       principal.paysRapatriement=clean(overlay.querySelector("#ltoa-pays").value);
       principal.assure12Mois=overlay.querySelector("#ltoa-12mois").value;
       // Missing contract answers are allowed: they stay available for manual KOALAH entry.
@@ -346,7 +349,7 @@
 
   // KOALAH is a 3-step React wizard. Never fill controls from another step
   // and never consume the pending payload before reaching the final review.
-  const wizardState={busy:false,step:0,finished:false,started:false,lastAction:0};
+  const wizardState={busy:false,step:0,finished:false,started:false,lastAction:0,lastUserInput:0};
   const visible=(el)=>!!el&&el.getClientRects().length>0&&!el.disabled;
   function field(label){
     const wanted=norm(label);
@@ -476,21 +479,35 @@
       }else setNative(social,p.regimeSocialKoalah||"Sécurité sociale");
     }
   }
-  function fillStep3(payload){
-    // Step 3 is deliberately non-submitting. The client chooses funeral capital.
-    clickChoiceByText(document,payload.typeContrat);
-    const p=payload.principal;
-    for(const [key,val] of [
-      ["Pays de rapatriement",p.paysRapatriement],
-      ["Pays de destination",p.paysRapatriement],
-      ["Assuré au cours des 12 derniers mois",p.assure12Mois],
-      ["Assuré les 12 derniers mois",p.assure12Mois]
-    ])writeField(key,val);
+  function selectContractType(type){
+    const desired=norm(type);
+    // Only interact with explicit contract-type controls, not any arbitrary button saying "Famille".
+    const candidates=[...document.querySelectorAll('main button,main label,main [role="radio"]')].filter(visible);
+    const target=candidates.find(el=>{
+      const value=norm(el.textContent);
+      return (value==="famille"||value==="individuel"||value==="familial") && ((desired==="famille"&&(value==="famille"||value==="familial"))||(desired==="individuel"&&value==="individuel"));
+    });
+    if(!target)return false;
+    const pressed=target.getAttribute("aria-pressed");
+    const checked=target.querySelector('input[type="radio"]')?.checked;
+    if(pressed!=="true"&&!checked)target.click();
+    return true;
+  }
+  async function fillStep3(payload){
+    if(!selectContractType(payload.typeContrat)){
+      showPause("Type de contrat "+payload.typeContrat+" introuvable : sélectionnez-le dans KOALAH avant de poursuivre.");
+      return false;
+    }
+    // React rerenders dependent family fields after type selection.
+    await sleep(450);
     if(payload.typeContrat==="Famille"){
       if(payload.conjoint)fillPerson(payload.conjoint,"conjoint.",section(/conjoint/i)||document);
-      payload.enfants.forEach((child,i)=>fillPerson(child,"enfants["+i+"].",section(new RegExp("enfant\\s*"+(i+1),"i"))||document));
+      payload.enfants.forEach((child,i)=>fillPerson(child,"enfants["+i+"].",section(new RegExp("enfant\\\\s*"+(i+1),"i"))||document));
     }
-    showPause("Étape 3 atteinte : vérifie les données, le pays et les membres de la famille, puis choisis manuellement le capital obsèques. Aucune validation automatique.");
+    const p=payload.principal;
+    for(const [key,val] of [["Pays de rapatriement",p.paysRapatriement],["Pays de destination",p.paysRapatriement],["Assuré au cours des 12 derniers mois",p.assure12Mois],["Assuré les 12 derniers mois",p.assure12Mois]])writeField(key,val);
+    showPause("Étape 3 : type "+payload.typeContrat+" sélectionné. Vérifiez le conjoint, les enfants et choisissez le capital obsèques. Aucune validation automatique.");
+    return true;
   }
   async function advanceWizard(payload){
     if(wizardState.busy||wizardState.finished)return;
@@ -502,9 +519,8 @@
       if(step===1)await fillStep1(payload.principal);
       if(step===2)fillStep2(payload.principal);
       if(step===3){
-        fillStep3(payload);
-        wizardState.finished=true;
-        await GM_deleteValue(STORE);
+        const selected=await fillStep3(payload);
+        if(selected){wizardState.finished=true;await GM_deleteValue(STORE);}
         return;
       }
       const missing=step===1?stepOneMissing():requiredMissing();
@@ -515,6 +531,10 @@
       const next=nextButton();
       if(!next){showPause("Bouton Suivant introuvable à l'étape "+step+".");return;}
       if(Date.now()-wizardState.lastAction<1500)return;
+      // Do not navigate away while the user is still typing (React fields update per keystroke).
+      if(Date.now()-wizardState.lastUserInput<1600)return;
+      const focused=document.activeElement;
+      if(focused&&focused.matches("main input:not([type=hidden]),main textarea")&&Date.now()-wizardState.lastUserInput<3000)return;
       wizardState.lastAction=Date.now();
       showPause("Étape "+step+" complète : passage à la suite...");
       next.click();
@@ -537,7 +557,7 @@
     };
     const observer=new MutationObserver(request);
     observer.observe(document.querySelector("main")||document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["value","aria-pressed","disabled"]});
-    document.addEventListener("input",request,true);
+    document.addEventListener("input",e=>{if(e.isTrusted)wizardState.lastUserInput=Date.now();request();},true);
     document.addEventListener("change",request,true);
     document.addEventListener("click",request,true);
     // Poll as a fallback when React only updates properties, or native date input
