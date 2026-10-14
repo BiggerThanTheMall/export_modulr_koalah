@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.4
+// @version      0.2.5
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -306,7 +306,8 @@
         return aliases.some(a=>txt===a||txt.includes(a));
       });
       if(!opt) return false;
-      el.value=opt.value;
+      const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,"value")?.set;
+      if(setter)setter.call(el,opt.value);else el.value=opt.value;
       el.dispatchEvent(new Event("input",{bubbles:true}));
       el.dispatchEvent(new Event("change",{bubbles:true}));
       return true;
@@ -353,9 +354,13 @@
       if(!visible(l)||norm(l.textContent).replace(/\*/g,"").trim()!==wanted)continue;
       const target=l.htmlFor&&document.getElementById(l.htmlFor);
       if(target&&visible(target))return target;
-      const parent=l.parentElement;
-      const el=parent?.querySelector("input,select,textarea,[role=combobox]");
-      if(el&&visible(el))return el;
+      // The date input is a sibling of the label's wrapper, not a child.
+      // Examine progressively wider ancestors, preferring direct controls.
+      for(let box=l.parentElement,depth=0;box&&depth<4;box=box.parentElement,depth++){
+        const controls=[...box.querySelectorAll("input,select,textarea,[role=combobox]")].filter(visible);
+        if(controls.length===1)return controls[0];
+        if(depth>0&&controls.length>1)break;
+      }
     }
     return null;
   }
@@ -448,18 +453,28 @@
     return result;
   }
   function fillStep2(p){
-    const pairs=[
-      ["Email",p.email],["E-mail",p.email],
-      ["Téléphone",p.telephone],["Adresse",p.adresse],
-      ["Code postal",p.codePostal],["Ville",p.ville],
-      ["Situation familiale",p.situationFamiliale],
-      ["Situation matrimoniale",p.situationFamiliale],
-      ["Régime social",p.regimeSocialKoalah],
-      ["Régime de sécurité sociale",p.regimeSocialKoalah],
-      ["Régime obligatoire",p.regimeSocialKoalah]
-    ];
-    for(const [key,val] of pairs)writeField(key,val);
-    // Sécurité sociale par défaut à tout âge ; exception explicite ModulR.
+    // KOALAH controls use distinct values from ModulR display labels.
+    for(const [key,val] of [["Email",p.email],["E-mail",p.email],["Adresse",p.adresse],["Code postal",p.codePostal],["Ville",p.ville]])writeField(key,val);
+    const phone=document.querySelector('main input[type="tel"][aria-label="Numéro de téléphone"]')||document.querySelector('main input[autocomplete="tel"]');
+    if(phone&&visible(phone)&&!phone.value&&p.telephone)setNative(phone,p.telephone);
+    const situation=norm(p.situationFamiliale);
+    const situationMap={"celibataire":"Celibataire","celibataire(e)":"Celibataire","concubin":"Concubin","concubin(e)":"Concubin","pacse":"Pacse","pacse(e)":"Pacse","marie":"Marie","marie(e)":"Marie","veuf":"Veuf","veuve":"Veuf","veuf / veuve":"Veuf","divorce":"Divorce","divorce(e)":"Divorce"};
+    const status=[...document.querySelectorAll("main select")].find(el=>[...el.options].some(o=>o.value==="Marie")&&[...el.options].some(o=>o.value==="Celibataire"));
+    if(status&&visible(status)&&!status.value){
+      const key=situationMap[situation]||Object.keys(situationMap).find(k=>situation.startsWith(k));
+      const mapped=situationMap[key];
+      if(mapped)setNative(status,mapped);
+    }
+    // Default to general Social Security; an explicit ModulR exception overrides.
+    const social=field("Régime social")||field("Régime de sécurité sociale")||field("Régime obligatoire");
+    if(social&&visible(social)&&!valueOf(social)){
+      if(social.tagName==="SELECT"){
+        const wished=norm(p.regimeSocialKoalah||"Sécurité sociale");
+        const opt=[...social.options].find(o=>norm(o.textContent)===wished||norm(o.value)===wished)
+          ||(wished==="securite sociale"?[...social.options].find(o=>/securite sociale|regime general/i.test(norm(o.textContent))):null);
+        if(opt)setNative(social,opt.value);
+      }else setNative(social,p.regimeSocialKoalah||"Sécurité sociale");
+    }
   }
   function fillStep3(payload){
     // Step 3 is deliberately non-submitting. The client chooses funeral capital.
