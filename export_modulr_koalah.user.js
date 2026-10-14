@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.3.8
+// @version      0.3.9
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -699,35 +699,26 @@
   }
 
   function injectEstimateButtons(){
-    // A persistent entry point in the Devis tab, even without a visible GRC row.
-    const devisTab=document.querySelector(".entity_info_block_1");
-    if(devisTab&&!devisTab.querySelector("#ltoa-k-devis-action")){
-      const heading=[...devisTab.querySelectorAll("h2")].find(h=>norm(h.textContent)==="devis");
-      const wrapper=heading?.parentElement;
-      if(wrapper){
-        const b=document.createElement("button");
-        b.id="ltoa-k-devis-action";
-        b.type="button";
-        b.className="ltoa-k-row-btn";
-        b.style.cssText="margin:0 10px;vertical-align:middle";
-        b.innerHTML='<img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><span>Exporter vers KOALAH</span>';
-        b.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openReview().catch(console.error);});
-        wrapper.appendChild(b);
-      }
-    }
-    const rows=document.querySelectorAll('.entity_info_block_1 tr[data-class_name="EstimateData"][data-entity_id]');
+    // ModulR can put Estimates outside entity_info_block_1; use real row attributes.
+    const rows=document.querySelectorAll('tr[data-class_name="EstimateData"][data-entity_id]');
     for(const row of rows){
       if(row.querySelector(".ltoa-k-row-btn"))continue;
-      const category=norm(row.querySelectorAll("td")[2]?.textContent||"");
+      const cells=row.querySelectorAll("td");
+      if(cells.length<4)continue;
+      const category=norm(cells[2].textContent||"");
       if(!category.includes("rapatriement"))continue;
-      const target=row.querySelector("td.icons_cell")||row.lastElementChild;
+      const target=row.querySelector("td.icons_cell")||cells[cells.length-1];
       if(!target)continue;
       const button=document.createElement("button");
       button.type="button";
       button.className="ltoa-k-row-btn";
       button.title="Exporter ce client vers KOALAH";
       button.innerHTML='<img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><span>KOALAH</span>';
-      button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openReview().catch(err=>{console.error("[KOALAH] Export impossible",err);button.disabled=false;button.innerHTML='<img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><span>KOALAH</span>';});});
+      button.addEventListener("click",event=>{
+        event.preventDefault();
+        event.stopPropagation();
+        openReview().catch(error=>console.error("[KOALAH] Export impossible",error));
+      });
       target.appendChild(button);
     }
   }
@@ -735,15 +726,15 @@
     if(location.hostname==="courtage.modulr.fr"){
       injectStyle();
       injectEstimateButtons();
-      // ModulR refreshes estimate rows asynchronously; keep buttons attached.
-      const target=document.querySelector(".entity_info_block_1");
-      if(target){
-        let timer;
-        new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(injectEstimateButtons,250);}).observe(target,{childList:true,subtree:true});
-      }
-      // On some ModulR cards the Devis tab is mounted after document-idle.
+      // The Devis panel may load after page init or be replaced on tab changes.
+      let timer;
+      new MutationObserver(mutations=>{
+        if(!mutations.some(m=>[...m.addedNodes].some(n=>n.nodeType===1 && (n.matches?.('tr[data-class_name="EstimateData"],table,.entity_info_block_1')||n.querySelector?.('tr[data-class_name="EstimateData"]')))))return;
+        clearTimeout(timer);
+        timer=setTimeout(injectEstimateButtons,180);
+      }).observe(document.body,{childList:true,subtree:true});
       let tries=0;
-      const retry=setInterval(()=>{injectEstimateButtons();if(++tries>=15)clearInterval(retry);},1200);
+      const retry=setInterval(()=>{injectEstimateButtons();if(++tries>=60)clearInterval(retry);},1500);
       return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
