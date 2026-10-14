@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.9
+// @version      0.3.0
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -662,7 +662,9 @@
       const name=String(window.name||"");
       // Only the tab opened by the exporter may consume an import.
       if(!name.startsWith(TOKEN_PREFIX))return;
-      const raw=await GM_getValue(STORE,"");
+      let raw=await GM_getValue(STORE,"");
+      // The new tab can load before Tampermonkey finishes storing the payload.
+      for(let i=0;i<15&&!raw;i++){await sleep(200);raw=await GM_getValue(STORE,"");}
       if(!raw)return;
       let pending;
       try{pending=JSON.parse(raw);}catch(_){await GM_deleteValue(STORE);return;}
