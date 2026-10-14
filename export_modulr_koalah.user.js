@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.3.0
+// @version      0.3.1
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -590,7 +590,12 @@
       for(let i=0;i<payload.enfants.length;i++)await fillFamilyPerson(payload.enfants[i],"enfant",i);
     }
     const p=payload.principal;
-    for(const [key,val] of [["Pays de rapatriement",p.paysRapatriement],["Pays de destination",p.paysRapatriement],["Assuré au cours des 12 derniers mois",p.assure12Mois],["Assuré les 12 derniers mois",p.assure12Mois]])writeField(key,val);
+    for(const [key,val] of [["Pays de rapatriement",p.paysRapatriement],["Pays de destination",p.paysRapatriement]])writeField(key,val);
+    const response=norm(p.assure12Mois);
+    if(response==="oui"||response==="non"){
+      const radio=document.querySelector('main input[type="radio"][name="aAssuranceDerniers12Mois"][value="'+response+'"]');
+      if(radio&&!radio.checked){radio.click();radio.dispatchEvent(new Event("change",{bubbles:true}));}
+    }
     highlightMissingFields();
     showPause("Données famille importées. Champs obligatoires encore vides en rouge : complétez-les et choisissez le capital obsèques. Aucune validation automatique.");
     return true;
