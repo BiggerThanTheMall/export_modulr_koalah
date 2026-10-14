@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.4.4
+// @version      0.4.5
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -236,7 +236,7 @@
       if(typeContrat==="Famille") selected=[...overlay.querySelectorAll(".ltoa-member:checked")].map(x=>family[Number(x.dataset.i)]);
       const payload={source:{modulrClientId:principal.modulrId,url:location.href},typeContrat,principal,conjoint:selected.find(x=>x.relation==="Conjoint")||null,enfants:selected.filter(x=>x.relation==="Enfant")};
       const token=TOKEN_PREFIX+Date.now()+"_"+Math.random().toString(36).slice(2);
-      const tab=window.open(KOALAH_NEW+"#"+encodeURIComponent(token),"_blank");
+      const tab=window.open(KOALAH_NEW+"#"+encodeURIComponent(token),token);
       if(!tab){
         overlay.querySelector("#ltoa-send").textContent="Autorisez les fenêtres pop-up puis réessayez";
         return;
@@ -719,29 +719,44 @@
       return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
-      const token=decodeURIComponent(location.hash.slice(1));
-      // A normal KOALAH visit has no export token and must never start an import.
-      if(!token.startsWith(TOKEN_PREFIX))return;
-      // Hide the temporary token immediately; preserve current path/query.
-      history.replaceState(history.state,"",location.pathname+location.search);
-      let raw=await GM_getValue(STORE,"");
-      // The new tab can load before Tampermonkey finishes storing the payload.
-      for(let i=0;i<15&&!raw;i++){await sleep(200);raw=await GM_getValue(STORE,"");}
-      if(!raw)return;
+      // Persist this import identity in its own tab across KOALAH login redirects.
+      const fragment=decodeURIComponent(location.hash.slice(1));
+      const named=String(window.name||"");
+      const stored=sessionStorage.getItem("ltoa-koalah-tab-token")||"";
+      const token=[fragment,named,stored].find(t=>t.startsWith(TOKEN_PREFIX))||"";
+      if(!token)return;
+      sessionStorage.setItem("ltoa-koalah-tab-token",token);
       let pending;
-      try{pending=JSON.parse(raw);}catch(_){await GM_deleteValue(STORE);return;}
-      if(!pending||pending.token!==token)return;
-      if(Date.now()-pending.created>MAX_IMPORT_AGE){await GM_deleteValue(STORE);return;}
-      // Authenticate normally if needed; never force the app away from its login screen.
-      if(document.querySelector('input[type="password"]')||/\/(login|connexion|signin|auth)(\/|$)/i.test(location.pathname))return;
-      if(location.pathname!=="/clients/nouveau"){
-        location.replace(KOALAH_NEW);
+      for(let i=0;i<25;i++){
+        try{pending=JSON.parse(await GM_getValue(STORE,"")||"null");}catch(_){pending=null;}
+        if(pending?.token===token)break;
+        await sleep(200);
+      }
+      if(pending?.token!==token)return;
+      if(Date.now()-pending.created>MAX_IMPORT_AGE){
+        sessionStorage.removeItem("ltoa-koalah-tab-token");
+        if(window.name===token)window.name="";
+        await GM_deleteValue(STORE);
         return;
       }
+      const login=["/login","/connexion","/signin","/auth"].some(p=>location.pathname===p||location.pathname.startsWith(p+"/"))
+        ||!!document.querySelector('input[type="password"]');
+      if(login){
+        // Wait for the user to sign in; do not force navigation on the login page.
+        return;
+      }
+      if(location.pathname!=="/clients/nouveau"){
+        location.replace(KOALAH_NEW+"#"+encodeURIComponent(token));
+        return;
+      }
+      if(location.hash)history.replaceState(history.state,"",location.pathname+location.search);
       try{
         await sleep(700);
         await importIntoKoalah(pending.payload);
+        sessionStorage.removeItem("ltoa-koalah-tab-token");
+        if(window.name===token)window.name="";
       }catch(e){console.error("[LTOA Modulr → Koalah]",e);}
+
     }
   }
   init();
