@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.1
+// @version      0.2.2
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -114,10 +114,6 @@
     }
     return {paysRapatriement:pays,assure12Mois:couverture};
   }
-  function askMissing(promptLabel,defaultValue=""){
-    const answer=window.prompt(promptLabel,defaultValue);
-    return answer===null?null:clean(answer);
-  }
   function regimeFromModulr(value){
     const v=norm(value);
     if(/\b(tns|travailleur non salarie|independant|independants|rsi|ssi|msa|agricole|fonction publique|fonctionnaire|regime special)\b/.test(v))return clean(value);
@@ -159,7 +155,7 @@
     if (document.getElementById("ltoa-k-style")) return;
     const s=document.createElement("style");
     s.id="ltoa-k-style";
-    s.textContent="#ltoa-k-btn{position:fixed;right:22px;bottom:22px;z-index:999990;background:#215c7f;color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px #0003}#ltoa-k-overlay{position:fixed;inset:0;z-index:999999;background:#0008;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif}#ltoa-k-modal{width:min(820px,94vw);max-height:90vh;overflow:auto;background:#fff;border-radius:12px;padding:22px;color:#1d2730;box-shadow:0 20px 70px #0006}.ltoa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;background:#f4f7f9;padding:14px;border-radius:8px}.ltoa-person{border:1px solid #d9e0e5;border-radius:8px;padding:10px;margin:8px 0}.ltoa-warn{color:#9b5b00;font-weight:700}.ltoa-ok{color:#19703d;font-weight:700}.ltoa-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.ltoa-actions button{border:0;border-radius:7px;padding:10px 14px;cursor:pointer}.ltoa-primary{background:#215c7f;color:#fff;font-weight:700}#ltoa-k-banner{position:fixed;left:20px;right:20px;top:18px;z-index:999999;background:#fff;border:2px solid #215c7f;border-radius:10px;padding:14px 16px;box-shadow:0 6px 24px #0003;font-family:Arial,sans-serif}";
+    s.textContent="#ltoa-k-btn{position:fixed;right:22px;bottom:22px;z-index:999990;background:#215c7f;color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px #0003}#ltoa-k-overlay{position:fixed;inset:0;z-index:999999;background:#0008;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif}#ltoa-k-modal{width:min(820px,94vw);max-height:90vh;overflow:auto;background:#fff;border-radius:12px;padding:22px;color:#1d2730;box-shadow:0 20px 70px #0006}.ltoa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;background:#f4f7f9;padding:14px;border-radius:8px}.ltoa-person{border:1px solid #d9e0e5;border-radius:8px;padding:10px;margin:8px 0}.ltoa-warn{color:#9b5b00;font-weight:700}.ltoa-ok{color:#19703d;font-weight:700}.ltoa-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.ltoa-actions button{border:0;border-radius:7px;padding:10px 14px;cursor:pointer}.ltoa-primary{background:#215c7f;color:#fff;font-weight:700}.ltoa-extra{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.ltoa-extra label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}.ltoa-extra input,.ltoa-extra select{border:1px solid #cad5e2;padding:10px;border-radius:8px;background:white;color:#1d2730}.ltoa-extra .ltoa-missing{border:2px solid #dc5555;background:#fffafa}.ltoa-extra .ltoa-complete{border:2px solid #24945c;background:#f7fff9}.ltoa-extra small{font-size:11px;color:#5b6776}#ltoa-k-banner{position:fixed;left:20px;right:20px;top:18px;z-index:999999;background:#fff;border:2px solid #215c7f;border-radius:10px;padding:14px 16px;box-shadow:0 6px 24px #0003;font-family:Arial,sans-serif}";
     document.head.appendChild(s);
   }
 
@@ -185,24 +181,21 @@
 
     const overlay=document.createElement("div");
     overlay.id="ltoa-k-overlay";
-    overlay.innerHTML='<div id="ltoa-k-modal"><h2>Export Modulr → Koalah</h2><h3>Client principal</h3><div class="ltoa-grid"><div><b>Identité</b><br>'+esc(principal.civilite)+' '+esc(principal.prenom)+' '+esc(principal.nom)+'</div><div><b>Naissance</b><br>'+esc(principal.dateNaissance||"Non renseignée")+' '+esc(principal.lieuNaissance||"")+'</div><div><b>Coordonnées</b><br>'+esc(principal.telephone||"—")+'<br>'+esc(principal.email||"—")+'</div><div><b>Adresse</b><br>'+esc(principal.adresse||"—")+'<br>'+esc(principal.codePostal)+' '+esc(principal.ville)+'</div></div><h3>Type Koalah</h3><label style="margin-right:24px"><input type="radio" name="ltoa-type" value="Individuel" '+(family.length?"":"checked")+'> Individuel</label><label><input type="radio" name="ltoa-type" value="Famille" '+(family.length?"checked":"")+'> Famille</label><div id="ltoa-family"><h3>Famille détectée dans Modulr</h3>'+familyHtml+'</div><p class="ltoa-warn">Les champs spécifiques au devis Koalah absents de Modulr resteront à vérifier dans Koalah.</p><div class="ltoa-actions"><button id="ltoa-cancel">Annuler</button><button id="ltoa-send" class="ltoa-primary">Continuer vers Koalah</button></div></div>';
+    overlay.innerHTML='<div id="ltoa-k-modal"><h2>Export Modulr → Koalah</h2><h3>Client principal</h3><div class="ltoa-grid"><div><b>Identité</b><br>'+esc(principal.civilite)+' '+esc(principal.prenom)+' '+esc(principal.nom)+'</div><div><b>Naissance</b><br>'+esc(principal.dateNaissance||"Non renseignée")+' '+esc(principal.lieuNaissance||"")+'</div><div><b>Coordonnées</b><br>'+esc(principal.telephone||"—")+'<br>'+esc(principal.email||"—")+'</div><div><b>Adresse</b><br>'+esc(principal.adresse||"—")+'<br>'+esc(principal.codePostal)+' '+esc(principal.ville)+'</div></div><h3>Informations du contrat</h3><div class="ltoa-extra"><label>Pays de rapatriement <input id="ltoa-pays" type="text" placeholder="À renseigner" value="'+esc(principal.paysRapatriement||"")+'"><small>Détection dans les descriptions ModulR, modifiable</small></label><label>Assuré au cours des 12 derniers mois ? <select id="ltoa-12mois"><option value="">À préciser</option><option value="Oui" '+(principal.assure12Mois==="Oui"?"selected":"")+'>Oui</option><option value="Non" '+(principal.assure12Mois==="Non"?"selected":"")+'>Non</option></select><small>Choix manuel si description inconnue</small></label></div><h3>Type Koalah</h3><label style="margin-right:24px"><input type="radio" name="ltoa-type" value="Individuel" '+(family.length?"":"checked")+'> Individuel</label><label><input type="radio" name="ltoa-type" value="Famille" '+(family.length?"checked":"")+'> Famille</label><div id="ltoa-family"><h3>Famille détectée dans Modulr</h3>'+familyHtml+'</div><p class="ltoa-warn">Les champs spécifiques au devis Koalah absents de Modulr resteront à vérifier dans Koalah.</p><div class="ltoa-actions"><button id="ltoa-cancel">Annuler</button><button id="ltoa-send" class="ltoa-primary">Continuer vers Koalah</button></div></div>';
     document.body.appendChild(overlay);
 
     const refresh=()=>{ const type=overlay.querySelector('input[name="ltoa-type"]:checked').value; overlay.querySelector("#ltoa-family").style.display=type==="Famille"?"block":"none"; };
     overlay.querySelectorAll('input[name="ltoa-type"]').forEach(r=>r.addEventListener("change",refresh)); refresh();
+    const updateExtra=()=>{for(const el of [overlay.querySelector("#ltoa-pays"),overlay.querySelector("#ltoa-12mois")]){el.classList.toggle("ltoa-complete",!!clean(el.value));el.classList.toggle("ltoa-missing",!clean(el.value));}};
+    overlay.querySelector("#ltoa-pays").addEventListener("input",updateExtra);
+    overlay.querySelector("#ltoa-12mois").addEventListener("change",updateExtra);
+    updateExtra();
     overlay.querySelector("#ltoa-cancel").onclick=()=>overlay.remove();
     overlay.querySelector("#ltoa-send").onclick=async()=>{
       const typeContrat=overlay.querySelector('input[name="ltoa-type"]:checked').value;
-      if(!principal.paysRapatriement){
-        const answer=askMissing("Pays de rapatriement : non identifié dans les descriptions ModulR. Indique le pays (ou laisse vide pour compléter sur KOALAH).");
-        if(answer===null)return;
-        principal.paysRapatriement=answer;
-      }
-      if(!principal.assure12Mois){
-        const answer=askMissing("Assuré durant les 12 derniers mois ? Indique Oui ou Non (ou laisse vide pour répondre sur KOALAH).");
-        if(answer===null)return;
-        principal.assure12Mois=/^oui$/i.test(answer)?"Oui":/^non$/i.test(answer)?"Non":"";
-      }
+      principal.paysRapatriement=clean(overlay.querySelector("#ltoa-pays").value);
+      principal.assure12Mois=overlay.querySelector("#ltoa-12mois").value;
+      // Missing contract answers are allowed: they stay available for manual KOALAH entry.
       let selected=[];
       if(typeContrat==="Famille") selected=[...overlay.querySelectorAll(".ltoa-member:checked")].map(x=>family[Number(x.dataset.i)]);
       const payload={source:{modulrClientId:principal.modulrId,url:location.href},typeContrat,principal,conjoint:selected.find(x=>x.relation==="Conjoint")||null,enfants:selected.filter(x=>x.relation==="Enfant")};
@@ -338,8 +331,10 @@
   }
   function normalizedDate(value){
     const v=clean(value);
-    const m=v.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})$/);
-    return m?m[3]+"-"+m[2]+"-"+m[1]:v;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v;
+    const m=v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+    if(m)return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+    return "";
   }
   function valueOf(el){
     if(!el)return "";
@@ -350,7 +345,10 @@
     const el=field(label);
     if(!el||!value)return false;
     if(valueOf(el))return true; // Never overwrite manual corrections.
-    return setNative(el,el.type==="date"?normalizedDate(value):value);
+    const converted=el.type==="date"?normalizedDate(value):value;
+    if(!converted)return false;
+    setNative(el,converted);
+    return valueOf(el)===converted;
   }
   function selectedCivilite(value){
     const wanted=/^(m|mr|monsieur)$/i.test(clean(value))?"Monsieur":/^(mme|mlle|madame|mademoiselle)$/i.test(clean(value))?"Madame":"";
@@ -397,6 +395,17 @@
     writeField("Date de naissance",p.dateNaissance);
     writeField("Lieu de naissance",p.lieuNaissance);
   }
+  function stepOneMissing(){
+    const result=[];
+    const group=document.querySelector('[role="group"][aria-label="Civilité"]');
+    if(!group||![...group.querySelectorAll("button")].some(b=>b.getAttribute("aria-pressed")==="true"))result.push("Civilité");
+    for(const label of ["Nom","Prénom","Date de naissance","Lieu de naissance"]){
+      const el=field(label);
+      if(!el||!valueOf(el))result.push(label);
+      else if(el.type==="date"&&(!/^\d{4}-\d{2}-\d{2}$/.test(el.value)||!el.checkValidity()))result.push(label);
+    }
+    return result;
+  }
   function fillStep2(p){
     const pairs=[
       ["Email",p.email],["E-mail",p.email],
@@ -442,7 +451,7 @@
         await GM_deleteValue(STORE);
         return;
       }
-      const missing=requiredMissing();
+      const missing=step===1?stepOneMissing():requiredMissing();
       if(missing.length){
         showPause("Étape "+step+" : renseigne "+missing.join(", ")+". La reprise est automatique après saisie.");
         return;
