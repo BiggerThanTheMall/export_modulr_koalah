@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.3.1
+// @version      0.3.2
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -187,7 +187,7 @@
     if (document.getElementById("ltoa-k-style")) return;
     const s=document.createElement("style");
     s.id="ltoa-k-style";
-    s.textContent=".ltoa-k-missing{border:2px solid #dc2626!important;background:#fff1f2!important;box-shadow:0 0 0 3px #fecdd3!important;font-weight:600!important}.ltoa-k-label-missing{color:#b91c1c!important;font-weight:800!important}#ltoa-k-btn{position:fixed;right:22px;bottom:22px;z-index:999990;background:#215c7f;color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px #0003}#ltoa-k-overlay{position:fixed;inset:0;z-index:999999;background:#0008;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif}#ltoa-k-modal{width:min(820px,94vw);max-height:90vh;overflow:auto;background:#fff;border-radius:12px;padding:22px;color:#1d2730;box-shadow:0 20px 70px #0006}.ltoa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;background:#f4f7f9;padding:14px;border-radius:8px}.ltoa-person{border:1px solid #d9e0e5;border-radius:8px;padding:10px;margin:8px 0}.ltoa-warn{color:#9b5b00;font-weight:700}.ltoa-ok{color:#19703d;font-weight:700}.ltoa-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.ltoa-actions button{border:0;border-radius:7px;padding:10px 14px;cursor:pointer}.ltoa-primary{background:#215c7f;color:#fff;font-weight:700}.ltoa-extra{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.ltoa-extra label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}.ltoa-extra input,.ltoa-extra select{border:1px solid #cad5e2;padding:10px;border-radius:8px;background:white;color:#1d2730}.ltoa-extra .ltoa-missing{border:2px solid #dc5555;background:#fffafa}.ltoa-extra .ltoa-complete{border:2px solid #24945c;background:#f7fff9}.ltoa-extra small{font-size:11px;color:#5b6776}#ltoa-k-banner{position:fixed;left:20px;right:20px;top:18px;z-index:999999;background:#fff;border:2px solid #215c7f;border-radius:10px;padding:14px 16px;box-shadow:0 6px 24px #0003;font-family:Arial,sans-serif}";
+    s.textContent=".ltoa-k-missing{border:2px solid #dc2626!important;background:#fff1f2!important;box-shadow:0 0 0 3px #fecdd3!important;font-weight:600!important}.ltoa-k-label-missing{color:#b91c1c!important;font-weight:800!important}.ltoa-k-row-btn{display:inline-flex;align-items:center;gap:5px;border:1px solid #aebdc9;border-radius:5px;background:#f5f8fa;color:#215c7f;padding:4px 7px;cursor:pointer;font-weight:600;font-size:11px;white-space:nowrap}.ltoa-k-row-btn:hover{background:#e4eef5;border-color:#215c7f}.ltoa-k-row-btn img{width:19px;height:19px;object-fit:contain}.ltoa-modal-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:13px;border-bottom:1px solid #e1e8ee}.ltoa-modal-head img{width:45px;height:45px;object-fit:contain;padding:5px;border:1px solid #e1e8ee;border-radius:10px}.ltoa-modal-head h2{margin:0;font-size:19px;color:#193552}.ltoa-modal-head p{margin:4px 0 0;font-size:12px;color:#6b7785}#ltoa-k-overlay{position:fixed;inset:0;z-index:999999;background:#0008;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif}#ltoa-k-modal{width:min(740px,94vw);max-height:88vh;overflow:auto;background:#fff;border-radius:14px;padding:20px;color:#1d2730;box-shadow:0 20px 70px #0006;font-size:13px}#ltoa-k-modal h3{font-size:13px;margin:15px 0 9px;color:#193552}.ltoa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;background:#f4f7f9;padding:14px;border-radius:8px}.ltoa-person{border:1px solid #d9e0e5;border-radius:8px;padding:10px;margin:8px 0}.ltoa-warn{color:#9b5b00;font-weight:700}.ltoa-ok{color:#19703d;font-weight:700}.ltoa-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.ltoa-actions button{border:0;border-radius:7px;padding:10px 14px;cursor:pointer}.ltoa-primary{background:#215c7f;color:#fff;font-weight:700}.ltoa-extra{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.ltoa-extra label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}.ltoa-extra input,.ltoa-extra select{border:1px solid #cad5e2;padding:10px;border-radius:8px;background:white;color:#1d2730}.ltoa-extra .ltoa-missing{border:2px solid #dc5555;background:#fffafa}.ltoa-extra .ltoa-complete{border:2px solid #24945c;background:#f7fff9}.ltoa-extra small{font-size:11px;color:#5b6776}#ltoa-k-banner{position:fixed;right:16px;bottom:16px;top:auto;left:auto;width:min(315px,calc(100vw - 32px));z-index:999999;background:#fff;border:1px solid #bbcedc;border-left:4px solid #215c7f;border-radius:11px;padding:11px 13px;box-shadow:0 5px 22px #0002;font-family:Arial,sans-serif;font-size:12px;line-height:1.5;color:#334155;pointer-events:none}#ltoa-k-banner b{color:#193552}#ltoa-k-status{display:block;margin-top:4px;font-size:11px;color:#64748b}";
     document.head.appendChild(s);
   }
 
@@ -213,7 +213,7 @@
 
     const overlay=document.createElement("div");
     overlay.id="ltoa-k-overlay";
-    overlay.innerHTML='<div id="ltoa-k-modal"><h2>Export Modulr → Koalah</h2><h3>Client principal</h3><div class="ltoa-grid"><div><b>Identité</b><br>'+esc(principal.civilite)+' '+esc(principal.prenom)+' '+esc(principal.nom)+'</div><div><b>Naissance</b><br>'+esc(principal.dateNaissance||"Non renseignée")+' '+esc(principal.lieuNaissance||"")+'</div><div><b>Coordonnées</b><br>'+esc(principal.telephone||"—")+'<br>'+esc(principal.email||"—")+'</div><div><b>Adresse</b><br>'+esc(principal.adresse||"—")+'<br>'+esc(principal.codePostal)+' '+esc(principal.ville)+'</div></div><h3>Informations à compléter</h3><div class="ltoa-extra"><label>Lieu de naissance <input id="ltoa-naissance" type="text" placeholder="Ville de naissance" value="'+esc(principal.lieuNaissance||"") +'"><small>Récupéré de ModulR, modifiable avant export</small></label><label>Pays de rapatriement <input id="ltoa-pays" type="text" placeholder="À renseigner" value="'+esc(principal.paysRapatriement||"")+'"><small>Détection dans les descriptions ModulR, modifiable</small></label><label>Assuré au cours des 12 derniers mois ? <select id="ltoa-12mois"><option value="">À préciser</option><option value="Oui" '+(principal.assure12Mois==="Oui"?"selected":"")+'>Oui</option><option value="Non" '+(principal.assure12Mois==="Non"?"selected":"")+'>Non</option></select><small>Choix manuel si description inconnue</small></label></div><h3>Type Koalah</h3><label style="margin-right:24px"><input type="radio" name="ltoa-type" value="Individuel" '+(family.length?"":"checked")+'> Individuel</label><label><input type="radio" name="ltoa-type" value="Famille" '+(family.length?"checked":"")+'> Famille</label><div id="ltoa-family"><h3>Famille détectée dans Modulr</h3>'+familyHtml+'</div><p class="ltoa-warn">Les champs spécifiques au devis Koalah absents de Modulr resteront à vérifier dans Koalah.</p><div class="ltoa-actions"><button id="ltoa-cancel">Annuler</button><button id="ltoa-send" class="ltoa-primary">Continuer vers Koalah</button></div></div>';
+    overlay.innerHTML='<div id="ltoa-k-modal"><div class="ltoa-modal-head"><img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><div><h2>Export vers KOALAH</h2><p>Contrôlez les données avant leur transfert</p></div></div><h3>Client principal</h3><div class="ltoa-grid"><div><b>Identité</b><br>'+esc(principal.civilite)+' '+esc(principal.prenom)+' '+esc(principal.nom)+'</div><div><b>Naissance</b><br>'+esc(principal.dateNaissance||"Non renseignée")+' '+esc(principal.lieuNaissance||"")+'</div><div><b>Coordonnées</b><br>'+esc(principal.telephone||"—")+'<br>'+esc(principal.email||"—")+'</div><div><b>Adresse</b><br>'+esc(principal.adresse||"—")+'<br>'+esc(principal.codePostal)+' '+esc(principal.ville)+'</div></div><h3>Informations à compléter</h3><div class="ltoa-extra"><label>Lieu de naissance <input id="ltoa-naissance" type="text" placeholder="Ville de naissance" value="'+esc(principal.lieuNaissance||"") +'"><small>Récupéré de ModulR, modifiable avant export</small></label><label>Pays de rapatriement <input id="ltoa-pays" type="text" placeholder="À renseigner" value="'+esc(principal.paysRapatriement||"")+'"><small>Détection dans les descriptions ModulR, modifiable</small></label><label>Assuré au cours des 12 derniers mois ? <select id="ltoa-12mois"><option value="">À préciser</option><option value="Oui" '+(principal.assure12Mois==="Oui"?"selected":"")+'>Oui</option><option value="Non" '+(principal.assure12Mois==="Non"?"selected":"")+'>Non</option></select><small>Choix manuel si description inconnue</small></label></div><h3>Type Koalah</h3><label style="margin-right:24px"><input type="radio" name="ltoa-type" value="Individuel" '+(family.length?"":"checked")+'> Individuel</label><label><input type="radio" name="ltoa-type" value="Famille" '+(family.length?"checked":"")+'> Famille</label><div id="ltoa-family"><h3>Famille détectée dans Modulr</h3>'+familyHtml+'</div><p class="ltoa-warn">Les champs spécifiques au devis Koalah absents de Modulr resteront à vérifier dans Koalah.</p><div class="ltoa-actions"><button id="ltoa-cancel">Annuler</button><button id="ltoa-send" class="ltoa-primary">Continuer vers Koalah</button></div></div>';
     document.body.appendChild(overlay);
 
     const refresh=()=>{ const type=overlay.querySelector('input[name="ltoa-type"]:checked').value; overlay.querySelector("#ltoa-family").style.display=type==="Famille"?"block":"none"; };
@@ -657,11 +657,32 @@
     request();
   }
 
+  function injectEstimateButtons(){
+    const rows=document.querySelectorAll('tr[data-class_name="EstimateData"][data-entity_id]');
+    for(const row of rows){
+      if(row.querySelector(".ltoa-k-row-btn"))continue;
+      const category=norm(row.querySelectorAll("td")[2]?.textContent||"");
+      if(!category.includes("rapatriement"))continue;
+      const target=row.querySelector("td.icons_cell")||row.lastElementChild;
+      if(!target)continue;
+      const button=document.createElement("button");
+      button.type="button";
+      button.className="ltoa-k-row-btn";
+      button.title="Exporter ce client vers KOALAH";
+      button.innerHTML='<img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><span>KOALAH</span>';
+      button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openReview();});
+      target.appendChild(button);
+    }
+  }
   async function init(){
     if(location.hostname==="courtage.modulr.fr"){
       injectStyle();
-      const b=document.createElement("button");
-      b.id="ltoa-k-btn"; b.textContent="Exporter vers Koalah"; b.onclick=openReview; document.body.appendChild(b); return;
+      injectEstimateButtons();
+      // ModulR refreshes estimate rows asynchronously; keep buttons attached.
+      const target=document.querySelector("#main-content")||document.body;
+      let timer;
+      new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(injectEstimateButtons,200);}).observe(target,{childList:true,subtree:true});
+      return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
       const name=String(window.name||"");
