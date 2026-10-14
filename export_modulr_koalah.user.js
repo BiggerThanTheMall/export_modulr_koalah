@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.8
+// @version      0.2.9
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -15,7 +15,9 @@
 
 (function () {
   "use strict";
-  const STORE = "ltoa_modulr_koalah_pending_v1";
+  const STORE = "ltoa_modulr_koalah_pending_v2";
+  const TOKEN_PREFIX="ltoa_koalah_import_";
+  const MAX_IMPORT_AGE=10*60*1000;
   const KOALAH_NEW = "https://plateforme.ltoa-assurances.fr/clients/nouveau";
   const AUTO_SUBMIT = false;
   const clean = (v) => (v || "").replace(/\s+/g, " ").trim();
@@ -185,7 +187,7 @@
     if (document.getElementById("ltoa-k-style")) return;
     const s=document.createElement("style");
     s.id="ltoa-k-style";
-    s.textContent="#ltoa-k-btn{position:fixed;right:22px;bottom:22px;z-index:999990;background:#215c7f;color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px #0003}#ltoa-k-overlay{position:fixed;inset:0;z-index:999999;background:#0008;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif}#ltoa-k-modal{width:min(820px,94vw);max-height:90vh;overflow:auto;background:#fff;border-radius:12px;padding:22px;color:#1d2730;box-shadow:0 20px 70px #0006}.ltoa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;background:#f4f7f9;padding:14px;border-radius:8px}.ltoa-person{border:1px solid #d9e0e5;border-radius:8px;padding:10px;margin:8px 0}.ltoa-warn{color:#9b5b00;font-weight:700}.ltoa-ok{color:#19703d;font-weight:700}.ltoa-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.ltoa-actions button{border:0;border-radius:7px;padding:10px 14px;cursor:pointer}.ltoa-primary{background:#215c7f;color:#fff;font-weight:700}.ltoa-extra{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.ltoa-extra label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}.ltoa-extra input,.ltoa-extra select{border:1px solid #cad5e2;padding:10px;border-radius:8px;background:white;color:#1d2730}.ltoa-extra .ltoa-missing{border:2px solid #dc5555;background:#fffafa}.ltoa-extra .ltoa-complete{border:2px solid #24945c;background:#f7fff9}.ltoa-extra small{font-size:11px;color:#5b6776}#ltoa-k-banner{position:fixed;left:20px;right:20px;top:18px;z-index:999999;background:#fff;border:2px solid #215c7f;border-radius:10px;padding:14px 16px;box-shadow:0 6px 24px #0003;font-family:Arial,sans-serif}";
+    s.textContent=".ltoa-k-missing{border:2px solid #dc2626!important;background:#fff1f2!important;box-shadow:0 0 0 3px #fecdd3!important;font-weight:600!important}.ltoa-k-label-missing{color:#b91c1c!important;font-weight:800!important}#ltoa-k-btn{position:fixed;right:22px;bottom:22px;z-index:999990;background:#215c7f;color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px #0003}#ltoa-k-overlay{position:fixed;inset:0;z-index:999999;background:#0008;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif}#ltoa-k-modal{width:min(820px,94vw);max-height:90vh;overflow:auto;background:#fff;border-radius:12px;padding:22px;color:#1d2730;box-shadow:0 20px 70px #0006}.ltoa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;background:#f4f7f9;padding:14px;border-radius:8px}.ltoa-person{border:1px solid #d9e0e5;border-radius:8px;padding:10px;margin:8px 0}.ltoa-warn{color:#9b5b00;font-weight:700}.ltoa-ok{color:#19703d;font-weight:700}.ltoa-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.ltoa-actions button{border:0;border-radius:7px;padding:10px 14px;cursor:pointer}.ltoa-primary{background:#215c7f;color:#fff;font-weight:700}.ltoa-extra{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.ltoa-extra label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}.ltoa-extra input,.ltoa-extra select{border:1px solid #cad5e2;padding:10px;border-radius:8px;background:white;color:#1d2730}.ltoa-extra .ltoa-missing{border:2px solid #dc5555;background:#fffafa}.ltoa-extra .ltoa-complete{border:2px solid #24945c;background:#f7fff9}.ltoa-extra small{font-size:11px;color:#5b6776}#ltoa-k-banner{position:fixed;left:20px;right:20px;top:18px;z-index:999999;background:#fff;border:2px solid #215c7f;border-radius:10px;padding:14px 16px;box-shadow:0 6px 24px #0003;font-family:Arial,sans-serif}";
     document.head.appendChild(s);
   }
 
@@ -232,8 +234,13 @@
       let selected=[];
       if(typeContrat==="Famille") selected=[...overlay.querySelectorAll(".ltoa-member:checked")].map(x=>family[Number(x.dataset.i)]);
       const payload={source:{modulrClientId:principal.modulrId,url:location.href},typeContrat,principal,conjoint:selected.find(x=>x.relation==="Conjoint")||null,enfants:selected.filter(x=>x.relation==="Enfant")};
-      await GM_setValue(STORE,JSON.stringify(payload));
-      window.open(KOALAH_NEW,"_blank");
+      const token=TOKEN_PREFIX+Date.now()+"_"+Math.random().toString(36).slice(2);
+      const tab=window.open(KOALAH_NEW,token);
+      if(!tab){
+        overlay.querySelector("#ltoa-send").textContent="Autorisez l'ouverture du nouvel onglet puis réessayez";
+        return;
+      }
+      await GM_setValue(STORE,JSON.stringify({token,created:Date.now(),payload}));
       overlay.remove();
     };
   }
@@ -521,24 +528,71 @@
     }
     return true;
   }
+  function familyCard(kind,index=0){
+    const box=familySection();
+    if(!box)return null;
+    if(kind==="conjoint"){
+      return [...box.querySelectorAll("h5")].find(h=>norm(h.textContent)==="conjoint(e)")?.closest(".relative.rounded-xl")||null;
+    }
+    return [...box.querySelectorAll("p")].find(p=>norm(p.textContent)==="enfant "+(index+1))?.closest(".relative.rounded-xl")||null;
+  }
+  function familyInput(card,label){
+    if(!card)return null;
+    const lbl=[...card.querySelectorAll("label")].find(l=>norm(l.textContent).replace(/\*/g,"").trim()===norm(label));
+    return lbl?.parentElement?.querySelector("input,select")||null;
+  }
+  async function fillFamilyPerson(person,kind,index=0){
+    const card=familyCard(kind,index);
+    if(!card||!person)return;
+    const civ=/^(mme|mlle|madame)$/i.test(clean(person.civilite))?"MME":/^(m|mr|monsieur)$/i.test(clean(person.civilite))?"M":"";
+    const fields=[
+      ["Civilité",civ],["Nom",person.nom],["Prénom",person.prenom],
+      ["Date de naissance",normalizedDate(person.dateNaissance)],
+      ["Lieu de naissance",person.lieuNaissance],
+      ["Régime ASAF",/tns/i.test(person.regimeSocial)?"TNS":/agricole|msa/i.test(person.regimeSocial)?"AGR":/alsace|moselle/i.test(person.regimeSocial)?"ALS":"GENE"]
+    ];
+    for(const [label,value] of fields){
+      const el=familyInput(card,label);
+      if(!el||!value)continue;
+      // For selects, the default first option is not a confirmed user value.
+      if(el.tagName!=="SELECT"&&valueOf(el))continue;
+      if(el.tagName==="SELECT"&&el.value===value)continue;
+      setNative(el,value);
+      await sleep(95);
+    }
+  }
+  function highlightMissingFields(){
+    const scope=document.querySelector("main");
+    if(!scope)return;
+    for(const label of scope.querySelectorAll("label")){
+      const caption=norm(label.textContent).replace(/\*/g,"").trim();
+      const el=label.parentElement?.querySelector("input,select,textarea");
+      if(!el||!visible(el))continue;
+      const isRequired=!!label.querySelector(".text-blue-600")||/\*/.test(label.textContent);
+      // Do not flag optional passport fields or capital values chosen by the user.
+      const isEmpty=!clean(el.value);
+      const missing=isRequired&&isEmpty;
+      el.classList.toggle("ltoa-k-missing",missing);
+      label.classList.toggle("ltoa-k-label-missing",missing);
+    }
+  }
   async function fillStep3(payload){
     if(!await selectContractType(payload.typeContrat)){
-      showPause("Sélection "+payload.typeContrat+" non confirmée. Choisissez le type dans KOALAH.");
+      showPause("Type de contrat "+payload.typeContrat+" introuvable.");
       return false;
     }
     if(payload.typeContrat==="Famille"){
       if(!await createFamilyFields(payload)){
-        showPause("Famille sélectionnée mais composition familiale introuvable.");
+        showPause("Composition familiale introuvable.");
         return false;
       }
-      // Family controls are dynamically created by KOALAH. Their input markup
-      // must be mapped before prefilling; never guess a person's identity.
-      showPause("Famille sélectionnée, blocs conjoint/enfants ajoutés. Vérifiez et complétez les identités puis choisissez le capital obsèques. Aucun envoi automatique.");
-    }else{
-      showPause("Individuel sélectionné. Choisissez le capital obsèques. Aucun envoi automatique.");
+      if(payload.conjoint)await fillFamilyPerson(payload.conjoint,"conjoint");
+      for(let i=0;i<payload.enfants.length;i++)await fillFamilyPerson(payload.enfants[i],"enfant",i);
     }
     const p=payload.principal;
     for(const [key,val] of [["Pays de rapatriement",p.paysRapatriement],["Pays de destination",p.paysRapatriement],["Assuré au cours des 12 derniers mois",p.assure12Mois],["Assuré les 12 derniers mois",p.assure12Mois]])writeField(key,val);
+    highlightMissingFields();
+    showPause("Données famille importées. Champs obligatoires encore vides en rouge : complétez-les et choisissez le capital obsèques. Aucune validation automatique.");
     return true;
   }
   async function advanceWizard(payload){
@@ -589,12 +643,12 @@
     };
     const observer=new MutationObserver(request);
     observer.observe(document.querySelector("main")||document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["value","aria-pressed","disabled"]});
-    document.addEventListener("input",e=>{if(e.isTrusted)wizardState.lastUserInput=Date.now();request();},true);
-    document.addEventListener("change",request,true);
+    document.addEventListener("input",e=>{if(e.isTrusted)wizardState.lastUserInput=Date.now();highlightMissingFields();request();},true);
+    document.addEventListener("change",()=>{highlightMissingFields();request();},true);
     document.addEventListener("click",request,true);
     // Poll as a fallback when React only updates properties, or native date input
     // and button transitions do not emit the expected DOM mutations.
-    const poll=setInterval(()=>{if(wizardState.finished){clearInterval(poll);observer.disconnect();return;}advanceWizard(payload);},1800);
+    const poll=setInterval(()=>{highlightMissingFields();if(wizardState.finished){clearInterval(poll);observer.disconnect();return;}advanceWizard(payload);},1800);
     request();
   }
 
@@ -605,32 +659,25 @@
       b.id="ltoa-k-btn"; b.textContent="Exporter vers Koalah"; b.onclick=openReview; document.body.appendChild(b); return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
-      const raw=await GM_getValue(STORE,""); 
-      if(!raw) return;
-
-      // Si Koalah impose une authentification, on conserve l'import en attente.
-      // Une fois connecté, dès qu'une page authentifiée est atteinte, on revient automatiquement
-      // sur /clients/nouveau pour reprendre l'import.
-      const isLoginPage =
-        !!document.querySelector('input[type="password"]') ||
-        /\/(login|connexion|signin|auth)(\/|$)/i.test(location.pathname);
-
-      if(isLoginPage) {
-        console.info("[LTOA Modulr → Koalah] Authentification Koalah requise. Import conservé en attente.");
-        return;
-      }
-
-      if(!location.pathname.startsWith("/clients/nouveau")){
+      const name=String(window.name||"");
+      // Only the tab opened by the exporter may consume an import.
+      if(!name.startsWith(TOKEN_PREFIX))return;
+      const raw=await GM_getValue(STORE,"");
+      if(!raw)return;
+      let pending;
+      try{pending=JSON.parse(raw);}catch(_){await GM_deleteValue(STORE);return;}
+      if(!pending||pending.token!==name)return;
+      if(Date.now()-pending.created>MAX_IMPORT_AGE){await GM_deleteValue(STORE);return;}
+      // Authenticate normally if needed; never force the app away from its login screen.
+      if(document.querySelector('input[type="password"]')||/\/(login|connexion|signin|auth)(\/|$)/i.test(location.pathname))return;
+      if(location.pathname!=="/clients/nouveau"){
         location.replace(KOALAH_NEW);
         return;
       }
-
       try{
         await sleep(700);
-        await importIntoKoalah(JSON.parse(raw));
-      }catch(e){
-        console.error("[LTOA Modulr → Koalah]",e);
-      }
+        await importIntoKoalah(pending.payload);
+      }catch(e){console.error("[LTOA Modulr → Koalah]",e);}
     }
   }
   init();
