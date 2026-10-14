@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.1.2
+// @version      0.2.0
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -276,36 +276,160 @@
   function section(regex){ const h=[...document.querySelectorAll("h1,h2,h3,h4,h5,legend,[role=heading]")].find(x=>regex.test(clean(x.textContent))); return h?(h.closest("fieldset,section,article,div")||h.parentElement):null; }
   function fillPerson(person,prefix,root){ if(!person) return []; return [fill([prefix+"civilite"],["Civilité"],person.civilite,root),fill([prefix+"nom"],["Nom"],person.nom,root),fill([prefix+"prenom"],["Prénom"],person.prenom,root),fill([prefix+"dateNaissance"],["Date de naissance"],person.dateNaissance,root),fill([prefix+"lieuNaissance"],["Lieu de naissance","Ville de naissance"],person.lieuNaissance,root)]; }
 
+  // KOALAH is a 3-step React wizard. Never fill controls from another step
+  // and never consume the pending payload before reaching the final review.
+  const wizardState={busy:false,step:0,finished:false,started:false,lastAction:0};
+  const visible=(el)=>!!el&&el.getClientRects().length>0&&!el.disabled;
+  function field(label){
+    const wanted=norm(label);
+    for(const l of document.querySelectorAll("label")){
+      if(!visible(l)||norm(l.textContent).replace(/\*/g,"").trim()!==wanted)continue;
+      const target=l.htmlFor&&document.getElementById(l.htmlFor);
+      if(target&&visible(target))return target;
+      const parent=l.parentElement;
+      const el=parent?.querySelector("input,select,textarea,[role=combobox]");
+      if(el&&visible(el))return el;
+    }
+    return null;
+  }
+  function normalizedDate(value){
+    const v=clean(value);
+    const m=v.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})$/);
+    return m?m[3]+"-"+m[2]+"-"+m[1]:v;
+  }
+  function valueOf(el){
+    if(!el)return "";
+    if(el.matches("input[type=checkbox],input[type=radio]"))return el.checked?el.value:"";
+    return clean(el.value||el.textContent||"");
+  }
+  function writeField(label,value){
+    const el=field(label);
+    if(!el||!value)return false;
+    if(valueOf(el))return true; // Never overwrite manual corrections.
+    return setNative(el,el.type==="date"?normalizedDate(value):value);
+  }
+  function selectedCivilite(value){
+    const wanted=/^(m|mr|monsieur)$/i.test(clean(value))?"Monsieur":/^(mme|mlle|madame|mademoiselle)$/i.test(clean(value))?"Madame":"";
+    if(!wanted)return false;
+    const group=[...document.querySelectorAll('[role="group"][aria-label]')].find(g=>norm(g.getAttribute("aria-label"))==="civilite");
+    const button=group&&[...group.querySelectorAll("button")].find(b=>norm(b.textContent)===norm(wanted));
+    if(!button)return false;
+    if(button.getAttribute("aria-pressed")!=="true")button.click();
+    return true;
+  }
+  function wizardStep(){
+    const text=clean(document.querySelector("main")?.textContent||"");
+    const m=text.match(/Étape\s*([123])\s*sur\s*3/i);
+    if(m)return Number(m[1]);
+    const active=[...document.querySelectorAll("main button")].find(b=>norm(b.textContent)==="identite"&&b.className.includes("bg-blue-600"));
+    return active?1:0;
+  }
+  function requiredMissing(){
+    const missing=[];
+    for(const l of document.querySelectorAll("main label")){
+      if(!visible(l)||!l.querySelector(".text-blue-600")&&!/\*/.test(l.textContent))continue;
+      const label=clean(l.textContent).replace(/\*/g,"").trim();
+      if(norm(label)==="civilite"){
+        const g=document.querySelector('[role="group"][aria-label="Civilité"]');
+        if(g&&![...g.querySelectorAll("button")].some(b=>b.getAttribute("aria-pressed")==="true"))missing.push(label);
+        continue;
+      }
+      const el=l.htmlFor?document.getElementById(l.htmlFor):l.parentElement?.querySelector("input,select,textarea,[role=combobox]");
+      if(el&&visible(el)&&!valueOf(el))missing.push(label);
+    }
+    return [...new Set(missing)];
+  }
+  function nextButton(){
+    return [...document.querySelectorAll("main button")].find(b=>visible(b)&&norm(b.textContent)==="suivant");
+  }
+  function showPause(message){
+    const status=document.querySelector("#ltoa-k-status");
+    if(status)status.textContent=message;
+  }
+  function fillStep1(p){
+    selectedCivilite(p.civilite);
+    writeField("Nom",p.nom);
+    writeField("Prénom",p.prenom);
+    writeField("Date de naissance",p.dateNaissance);
+    writeField("Lieu de naissance",p.lieuNaissance);
+  }
+  function fillStep2(p){
+    const pairs=[
+      ["Email",p.email],["E-mail",p.email],
+      ["Téléphone",p.telephone],["Adresse",p.adresse],
+      ["Code postal",p.codePostal],["Ville",p.ville],
+      ["Situation familiale",p.situationFamiliale],
+      ["Situation matrimoniale",p.situationFamiliale]
+    ];
+    for(const [key,val] of pairs)writeField(key,val);
+    // A senior's social security regime is a product rule; do not infer
+    // an age threshold from the interface. The threshold needs confirmation.
+  }
+  function fillStep3(payload){
+    // Step 3 is deliberately non-submitting. The client chooses funeral capital.
+    clickChoiceByText(document,payload.typeContrat);
+    const p=payload.principal;
+    for(const [key,val] of [
+      ["Pays de rapatriement",p.paysRapatriement],
+      ["Pays de destination",p.paysRapatriement],
+      ["Assuré au cours des 12 derniers mois",p.assure12Mois],
+      ["Assuré les 12 derniers mois",p.assure12Mois]
+    ])writeField(key,val);
+    if(payload.typeContrat==="Famille"){
+      if(payload.conjoint)fillPerson(payload.conjoint,"conjoint.",section(/conjoint/i)||document);
+      payload.enfants.forEach((child,i)=>fillPerson(child,"enfants["+i+"].",section(new RegExp("enfant\\s*"+(i+1),"i"))||document));
+    }
+    showPause("Étape 3 atteinte : vérifie les données, le pays et les membres de la famille, puis choisis manuellement le capital obsèques. Aucune validation automatique.");
+  }
+  async function advanceWizard(payload){
+    if(wizardState.busy||wizardState.finished)return;
+    wizardState.busy=true;
+    try{
+      const step=wizardStep();
+      if(!step){showPause("Formulaire KOALAH en cours de chargement.");return;}
+      wizardState.step=step;
+      if(step===1)fillStep1(payload.principal);
+      if(step===2)fillStep2(payload.principal);
+      if(step===3){
+        fillStep3(payload);
+        wizardState.finished=true;
+        await GM_deleteValue(STORE);
+        return;
+      }
+      const missing=requiredMissing();
+      if(missing.length){
+        showPause("Étape "+step+" : renseigne "+missing.join(", ")+". La reprise est automatique après saisie.");
+        return;
+      }
+      const next=nextButton();
+      if(!next){showPause("Bouton Suivant introuvable à l'étape "+step+".");return;}
+      if(Date.now()-wizardState.lastAction<1200)return;
+      wizardState.lastAction=Date.now();
+      showPause("Étape "+step+" complète : passage à la suite...");
+      next.click();
+    }catch(e){console.error("[LTOA Modulr → Koalah] assistant",e);showPause("Import suspendu : "+e.message);}
+    finally{wizardState.busy=false;}
+  }
   async function importIntoKoalah(payload){
+    if(wizardState.started)return;
+    wizardState.started=true;
     injectStyle();
     const banner=document.createElement("div");
     banner.id="ltoa-k-banner";
-    banner.innerHTML="<b>Import Modulr détecté</b> — "+esc(payload.principal.prenom)+" "+esc(payload.principal.nom)+" · "+esc(payload.typeContrat)+'<br><span id="ltoa-k-status">Remplissage en cours...</span>';
+    banner.innerHTML="<b>Import Modulr → KOALAH</b> — "+esc(payload.principal.prenom)+" "+esc(payload.principal.nom)+" · "+esc(payload.typeContrat)+'<br><span id="ltoa-k-status">Initialisation des étapes...</span>';
     document.body.appendChild(banner);
-    let checks=[];
-    checks.push(fill(["civilite"],["Civilité"],payload.principal.civilite));
-    checks.push(fill(["nom"],["Nom"],payload.principal.nom));
-    checks.push(fill(["prenom"],["Prénom"],payload.principal.prenom));
-    checks.push(fill(["dateNaissance"],["Date de naissance"],payload.principal.dateNaissance));
-    checks.push(fill(["lieuNaissance"],["Lieu de naissance","Ville de naissance"],payload.principal.lieuNaissance));
-    checks.push(fill(["email"],["Email","E-mail"],payload.principal.email));
-    checks.push(fill(["telephone"],["Téléphone"],payload.principal.telephone));
-    checks.push(fill(["adresse"],["Adresse"],payload.principal.adresse));
-    checks.push(fill(["codePostal"],["Code postal"],payload.principal.codePostal));
-    checks.push(fill(["ville"],["Ville"],payload.principal.ville));
-    checks.push(fill(["situationFamiliale"],["Situation familiale","Situation matrimoniale"],payload.principal.situationFamiliale));
-    checks.push(fill(["typeContrat"],["Type de contrat","Contrat"],payload.typeContrat));
-    await sleep(700);
-    if(payload.typeContrat==="Famille"){
-      if(payload.conjoint) checks.push(...fillPerson(payload.conjoint,"conjoint.",section(/conjoint/i)||document));
-      payload.enfants.forEach((child,i)=>checks.push(...fillPerson(child,"enfants["+i+"].",section(new RegExp("enfant\\s*"+(i+1),"i"))||document)));
-    }
-    const failures=checks.filter(x=>x===false).length;
-    const status=banner.querySelector("#ltoa-k-status");
-    if(failures){ status.textContent="Import partiel : "+failures+" champ(s) non retrouvés automatiquement. Vérifie le formulaire avant validation."; banner.style.borderColor="#b26a00"; }
-    else { status.textContent="Données Modulr injectées. Vérifie les champs spécifiques Koalah puis valide normalement."; banner.style.borderColor="#19703d"; }
-    await GM_deleteValue(STORE);
-    if(AUTO_SUBMIT&&failures===0) document.querySelector('form button[type="submit"],form input[type="submit"]')?.click();
+    let timer;
+    const request=()=>{
+      if(wizardState.finished)return;
+      clearTimeout(timer);
+      timer=setTimeout(()=>advanceWizard(payload),350);
+    };
+    const observer=new MutationObserver(request);
+    observer.observe(document.querySelector("main")||document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["value","aria-pressed","disabled"]});
+    document.addEventListener("input",request,true);
+    document.addEventListener("change",request,true);
+    document.addEventListener("click",request,true);
+    request();
   }
 
   async function init(){
