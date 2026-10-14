@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.3.6
+// @version      0.3.7
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -735,14 +735,16 @@
         let task;
         try{task=JSON.parse(value);}catch(_){return;}
         if(!task?.token||Date.now()-task.created>MAX_IMPORT_AGE)return;
-        if(document.querySelector('input[type="password"]')||/\\/(login|connexion|signin|auth)(\\/|$)/i.test(location.pathname))return;
+        if(document.querySelector('input[type="password"]')||["/login","/connexion","/signin","/auth"].some(p=>location.pathname.startsWith(p)))return;
         const ackKey=STORE+"_ack_"+task.token;
         if(await GM_getValue(ackKey,false))return;
         await GM_setValue(ackKey,true);
         if(location.pathname==="/clients/nouveau"){
-          // Load the token in this existing tab; its authentication context stays intact.
+          // Already on the correct page: import now without reloading the React app.
+          await importIntoKoalah(task.payload);
+        }else{
           location.assign(KOALAH_NEW+"#"+encodeURIComponent(task.token));
-        }else location.assign(KOALAH_NEW+"#"+encodeURIComponent(task.token));
+        }
       });
       const token=decodeURIComponent(location.hash.slice(1));
       // A normal KOALAH visit has no export token and must never start an import.
