@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.3
+// @version      0.2.4
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -43,6 +43,9 @@
       const fr=text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\b/);
       return fr?fr[3]+"-"+fr[2].padStart(2,"0")+"-"+fr[1].padStart(2,"0"):"";
     };
+    const identityBlock=[...doc.querySelectorAll(".car_template_field,.card_template_field")].find(n=>norm(n.querySelector("p")?.textContent)==="date de naissance");
+    const fromIdentity=valid(identityBlock?.querySelectorAll("p")[1]?.textContent||"");
+    if(fromIdentity)return fromIdentity;
     const fromLabel=valid(valueByLabel(doc,"Date de naissance"));
     if(fromLabel)return fromLabel;
     const candidates=[...doc.querySelectorAll("input, time, [data-field], [data-name], .car_template_field, .card_template_field, dt, dd, tr")];
@@ -415,12 +418,23 @@
     const status=document.querySelector("#ltoa-k-status");
     if(status)status.textContent=message;
   }
-  function fillStep1(p){
+  async function fillStep1(p){
+    // Change one React-controlled field per render to avoid stale state resets.
     selectedCivilite(p.civilite);
-    writeField("Nom",p.nom);
-    writeField("Prénom",p.prenom);
-    writeField("Date de naissance",p.dateNaissance);
-    writeField("Lieu de naissance",p.lieuNaissance);
+    await sleep(100);
+    for(const [label,value] of [["Nom",p.nom],["Prénom",p.prenom],["Date de naissance",p.dateNaissance],["Lieu de naissance",p.lieuNaissance]]){
+      const el=field(label);
+      if(el&&!valueOf(el)&&value){writeField(label,value);await sleep(150);}
+    }
+    const date=field("Date de naissance");
+    const expected=normalizedDate(p.dateNaissance);
+    if(date&&expected&&!date.value){
+      const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;
+      setter.call(date,expected);
+      date.dispatchEvent(new Event("input",{bubbles:true}));
+      date.dispatchEvent(new Event("change",{bubbles:true}));
+      await sleep(200);
+    }
   }
   function stepOneMissing(){
     const result=[];
@@ -470,7 +484,7 @@
       const step=wizardStep();
       if(!step){showPause("Formulaire KOALAH en cours de chargement.");return;}
       wizardState.step=step;
-      if(step===1)fillStep1(payload.principal);
+      if(step===1)await fillStep1(payload.principal);
       if(step===2)fillStep2(payload.principal);
       if(step===3){
         fillStep3(payload);
@@ -485,7 +499,7 @@
       }
       const next=nextButton();
       if(!next){showPause("Bouton Suivant introuvable à l'étape "+step+".");return;}
-      if(Date.now()-wizardState.lastAction<1200)return;
+      if(Date.now()-wizardState.lastAction<1500)return;
       wizardState.lastAction=Date.now();
       showPause("Étape "+step+" complète : passage à la suite...");
       next.click();
@@ -511,6 +525,9 @@
     document.addEventListener("input",request,true);
     document.addEventListener("change",request,true);
     document.addEventListener("click",request,true);
+    // Poll as a fallback when React only updates properties, or native date input
+    // and button transitions do not emit the expected DOM mutations.
+    const poll=setInterval(()=>{if(wizardState.finished){clearInterval(poll);observer.disconnect();return;}advanceWizard(payload);},1800);
     request();
   }
 
