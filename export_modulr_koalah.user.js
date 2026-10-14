@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.2.7
+// @version      0.2.8
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -479,34 +479,66 @@
       }else setNative(social,p.regimeSocialKoalah||"Sécurité sociale");
     }
   }
-  function selectContractType(type){
-    const desired=norm(type);
-    // Only interact with explicit contract-type controls, not any arbitrary button saying "Famille".
-    const candidates=[...document.querySelectorAll('main button,main label,main [role="radio"]')].filter(visible);
-    const target=candidates.find(el=>{
-      const value=norm(el.textContent);
-      return (value==="famille"||value==="individuel"||value==="familial") && ((desired==="famille"&&(value==="famille"||value==="familial"))||(desired==="individuel"&&value==="individuel"));
-    });
+  function contractButton(type){
+    const heading=[...document.querySelectorAll("main label")].find(e=>norm(e.textContent).startsWith("type de contrat"));
+    const block=heading?.parentElement;
+    if(!block)return null;
+    return [...block.querySelectorAll("button")].find(b=>[...b.querySelectorAll("span.font-bold")].some(span=>norm(span.textContent)===norm(type)))||null;
+  }
+  async function selectContractType(type){
+    const target=contractButton(type);
     if(!target)return false;
-    const pressed=target.getAttribute("aria-pressed");
-    const checked=target.querySelector('input[type="radio"]')?.checked;
-    if(pressed!=="true"&&!checked)target.click();
+    if(!target.className.includes("border-blue-300")){
+      target.click();
+      await sleep(500);
+    }
+    return !!contractButton(type)?.className.includes("border-blue-300");
+  }
+  function familySection(){
+    const title=[...document.querySelectorAll("main h4")].find(h=>norm(h.textContent)==="composition familiale");
+    return title?.closest(".rounded-2xl")||null;
+  }
+  function familyAddButton(type){
+    const box=familySection();
+    return [...(box?.querySelectorAll("button")||[])].find(b=>norm(b.textContent)==="ajouter un "+type)||null;
+  }
+  async function createFamilyFields(payload){
+    let box=familySection();
+    if(!box)return false;
+    if(payload.conjoint&&/aucun conjoint/i.test(box.textContent)){
+      const add=familyAddButton("conjoint");
+      if(add){add.click();await sleep(450);}
+    }
+    box=familySection();
+    const countLabel=[...box.querySelectorAll("h5")].find(e=>norm(e.textContent)==="enfants");
+    const childBox=countLabel?.closest(".rounded-xl");
+    const current=Number(childBox?.querySelector("span.rounded-full")?.textContent?.trim()||0);
+    for(let i=current;i<(payload.enfants||[]).length;i++){
+      const add=familyAddButton("enfant");
+      if(!add)break;
+      add.click();
+      await sleep(400);
+    }
     return true;
   }
   async function fillStep3(payload){
-    if(!selectContractType(payload.typeContrat)){
-      showPause("Type de contrat "+payload.typeContrat+" introuvable : sélectionnez-le dans KOALAH avant de poursuivre.");
+    if(!await selectContractType(payload.typeContrat)){
+      showPause("Sélection "+payload.typeContrat+" non confirmée. Choisissez le type dans KOALAH.");
       return false;
     }
-    // React rerenders dependent family fields after type selection.
-    await sleep(450);
     if(payload.typeContrat==="Famille"){
-      if(payload.conjoint)fillPerson(payload.conjoint,"conjoint.",section(/conjoint/i)||document);
-      payload.enfants.forEach((child,i)=>fillPerson(child,"enfants["+i+"].",section(new RegExp("enfant\\\\s*"+(i+1),"i"))||document));
+      if(!await createFamilyFields(payload)){
+        showPause("Famille sélectionnée mais composition familiale introuvable.");
+        return false;
+      }
+      // Family controls are dynamically created by KOALAH. Their input markup
+      // must be mapped before prefilling; never guess a person's identity.
+      showPause("Famille sélectionnée, blocs conjoint/enfants ajoutés. Vérifiez et complétez les identités puis choisissez le capital obsèques. Aucun envoi automatique.");
+    }else{
+      showPause("Individuel sélectionné. Choisissez le capital obsèques. Aucun envoi automatique.");
     }
     const p=payload.principal;
     for(const [key,val] of [["Pays de rapatriement",p.paysRapatriement],["Pays de destination",p.paysRapatriement],["Assuré au cours des 12 derniers mois",p.assure12Mois],["Assuré les 12 derniers mois",p.assure12Mois]])writeField(key,val);
-    showPause("Étape 3 : type "+payload.typeContrat+" sélectionné. Vérifiez le conjoint, les enfants et choisissez le capital obsèques. Aucune validation automatique.");
     return true;
   }
   async function advanceWizard(payload){
