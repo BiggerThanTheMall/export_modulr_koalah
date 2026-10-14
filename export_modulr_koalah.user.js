@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.3.2
+// @version      0.3.3
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -197,10 +197,10 @@
     principal.paysRapatriement=fromDescription.paysRapatriement;
     principal.assure12Mois=fromDescription.assure12Mois;
     principal.regimeSocialKoalah=regimeFromModulr(principal.regimeSocial);
-    const btn=document.getElementById("ltoa-k-btn");
-    btn.disabled=true; btn.textContent="Analyse famille...";
+    const btn=document.activeElement?.closest?.(".ltoa-k-row-btn")||null;
+    if(btn){btn.disabled=true;btn.dataset.originalHtml=btn.innerHTML;btn.textContent="Chargement...";}
     const family=await Promise.all(links.map(loadRelative));
-    btn.disabled=false; btn.textContent="Exporter vers Koalah";
+    if(btn){btn.disabled=false;btn.innerHTML=btn.dataset.originalHtml||"KOALAH";}
 
     const familyHtml = family.length ? family.map((p,i)=>{
       const missing=[];
@@ -658,7 +658,7 @@
   }
 
   function injectEstimateButtons(){
-    const rows=document.querySelectorAll('tr[data-class_name="EstimateData"][data-entity_id]');
+    const rows=document.querySelectorAll('.entity_info_block_1 tr[data-class_name="EstimateData"][data-entity_id]');
     for(const row of rows){
       if(row.querySelector(".ltoa-k-row-btn"))continue;
       const category=norm(row.querySelectorAll("td")[2]?.textContent||"");
@@ -670,7 +670,7 @@
       button.className="ltoa-k-row-btn";
       button.title="Exporter ce client vers KOALAH";
       button.innerHTML='<img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><span>KOALAH</span>';
-      button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openReview();});
+      button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openReview().catch(err=>{console.error("[KOALAH] Export impossible",err);button.disabled=false;button.innerHTML='<img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><span>KOALAH</span>';});});
       target.appendChild(button);
     }
   }
@@ -679,9 +679,11 @@
       injectStyle();
       injectEstimateButtons();
       // ModulR refreshes estimate rows asynchronously; keep buttons attached.
-      const target=document.querySelector("#main-content")||document.body;
-      let timer;
-      new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(injectEstimateButtons,200);}).observe(target,{childList:true,subtree:true});
+      const target=document.querySelector(".entity_info_block_1");
+      if(target){
+        let timer;
+        new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(injectEstimateButtons,250);}).observe(target,{childList:true,subtree:true});
+      }
       return;
     }
     if(location.hostname==="plateforme.ltoa-assurances.fr"){
