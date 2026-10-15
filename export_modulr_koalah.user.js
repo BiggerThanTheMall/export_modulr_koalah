@@ -697,13 +697,8 @@
       if(cells.length<4||!norm(cells[2]?.textContent).includes("rapatriement"))continue;
       (row.querySelector("td.icons_cell")||cells[cells.length-1]).appendChild(koalahButton("KOALAH"));
     }
-    // Guaranteed fallback on a client card even when Devis content isn't mounted yet.
-    if(!document.getElementById("ltoa-k-fallback")){
-      const b=koalahButton("Exporter vers KOALAH");
-      b.id="ltoa-k-fallback";
-      b.style.cssText="position:fixed!important;left:16px!important;bottom:16px!important;z-index:999990!important;padding:9px 12px!important;background:#f5f8fa!important;box-shadow:0 3px 14px #0002!important";
-      document.body.appendChild(b);
-    }
+    // Only show KOALAH on eligible Devis rows; never render a floating shortcut.
+    document.getElementById("ltoa-k-fallback")?.remove();
   }
   async function init(){
     if(location.hostname==="courtage.modulr.fr"){
