@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.4.6
+// @version      0.4.7
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -38,34 +38,45 @@
     return "";
   }
 
+  function normalizedBirthDate(value){
+    const v=clean(value);
+    const iso=v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    const fr=v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if(!iso&&!fr)return "";
+    const y=Number(iso?iso[1]:fr[3]),m=Number(iso?iso[2]:fr[2]),d=Number(iso?iso[3]:fr[1]);
+    const today=new Date();
+    const parsed=new Date(y,m-1,d);
+    if(y<1900||parsed.getFullYear()!==y||parsed.getMonth()!==m-1||parsed.getDate()!==d||parsed>today)return "";
+    return String(y).padStart(4,"0")+"-"+String(m).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+  }
+
   function readBirthDate(doc){
-    const valid=(v)=>{
-      const text=clean(v);
-      const iso=text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-      if(iso)return iso[0];
-      const fr=text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\b/);
-      return fr?fr[3]+"-"+fr[2].padStart(2,"0")+"-"+fr[1].padStart(2,"0"):"";
-    };
-    const identityBlock=[...doc.querySelectorAll(".car_template_field,.card_template_field")].find(n=>norm(n.querySelector("p")?.textContent)==="date de naissance");
-    const fromIdentity=valid(identityBlock?.querySelectorAll("p")[1]?.textContent||"");
-    if(fromIdentity)return fromIdentity;
-    const fromLabel=valid(valueByLabel(doc,"Date de naissance"));
-    if(fromLabel)return fromLabel;
-    const candidates=[...doc.querySelectorAll("input, time, [data-field], [data-name], .car_template_field, .card_template_field, dt, dd, tr")];
-    for(const node of candidates){
-      const key=norm([node.getAttribute("name"),node.id,node.getAttribute("data-field"),node.getAttribute("data-name"),node.getAttribute("aria-label"),node.tagName==="INPUT"?node.closest("div")?.textContent:node.textContent].filter(Boolean).join(" "));
-      if(!/(date de naissance|date_naissance|datenaissance|birthdate|datebirth|date-de-naissance)/.test(key))continue;
-      const elems=[node,node.querySelector("input"),node.querySelector("time"),node.nextElementSibling];
-      for(const el of elems){
-        if(!el)continue;
-        const value=valid(el.value||el.getAttribute?.("datetime")||el.textContent);
-        if(value)return value;
+    // Read only the actual date-of-birth value, not an ancestor's full text
+    // (which can contain a 2024/2026 contract or creation date).
+    const blocks=[...doc.querySelectorAll(".car_template_field,.card_template_field")];
+    for(const block of blocks){
+      const ps=block.querySelectorAll("p");
+      if(ps.length<2||norm(ps[0].textContent).replace(/\s*:\s*$/,"")!=="date de naissance")continue;
+      const value=normalizedBirthDate(ps[1].textContent);
+      if(value)return value;
+    }
+    for(const input of doc.querySelectorAll("input")){
+      const key=norm([input.name,input.id,input.getAttribute("data-field"),input.getAttribute("data-name"),input.getAttribute("aria-label")].filter(Boolean).join(" "));
+      if(!/(date.?de.?naissance|date_?naissance|datenaissance|birth.?date|dob)/.test(key))continue;
+      const value=normalizedBirthDate(input.value||input.getAttribute("value")||"");
+      if(value)return value;
+    }
+    for(const row of doc.querySelectorAll("tr,dl")){
+      const label=row.querySelector("th,dt");
+      const value=row.querySelector("td,dd");
+      if(label&&value&&norm(label.textContent).replace(/\s*:\s*$/,"")==="date de naissance"){
+        const parsed=normalizedBirthDate(value.textContent);
+        if(parsed)return parsed;
       }
     }
-    // Last resort: scoped text pattern, never guess unrelated dates.
     const body=doc.body?.innerText||doc.body?.textContent||"";
-    const match=body.match(/date\s+de\s+naissance\s*[:\-]?\s*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}|\d{4}-\d{2}-\d{2})/i);
-    return match?valid(match[1]):"";
+    const match=body.match(/(?:^|\n)\s*date\s+de\s+naissance\s*[:\-]?\s*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}|\d{4}-\d{2}-\d{2})(?=\s|$)/i);
+    return match?normalizedBirthDate(match[1]):"";
   }
 
   function parsePerson(doc, explicitId = "") {
@@ -375,24 +386,29 @@
     }
     return null;
   }
-  function normalizedDate(value){
-    const v=clean(value);
-    if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v;
-    const m=v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
-    if(m)return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
-    return "";
-  }
+  function normalizedDate(value){ return normalizedBirthDate(value); }
   function valueOf(el){
     if(!el)return "";
     if(el.matches("input[type=checkbox],input[type=radio]"))return el.checked?el.value:"";
     return el.matches("input,select,textarea")?clean(el.value):clean(el.textContent||"");
   }
+  const initializedBirthFields=new WeakSet();
+  const manuallyEditedBirthFields=new WeakSet();
+  document.addEventListener("input",event=>{
+    if(event.isTrusted&&event.target?.matches?.("input")&&event.target===field("Date de naissance"))manuallyEditedBirthFields.add(event.target);
+  },true);
   function writeField(label,value){
     const el=field(label);
     if(!el||!value)return false;
-    if(valueOf(el))return true; // Never overwrite manual corrections.
-    const converted=el.type==="date"?normalizedDate(value):value;
+    const isBirth=norm(label)==="date de naissance";
+    const converted=isBirth?normalizedDate(value):(el.type==="date"?normalizedDate(value):value);
     if(!converted)return false;
+    if(isBirth){
+      if(manuallyEditedBirthFields.has(el))return valueOf(el)===converted;
+      if(initializedBirthFields.has(el))return valueOf(el)===converted;
+      initializedBirthFields.add(el);
+      if(valueOf(el)===converted)return true;
+    }else if(valueOf(el))return true; // Never overwrite manual corrections.
     setNative(el,converted);
     return valueOf(el)===converted;
   }
@@ -459,7 +475,7 @@
     }
     const date=field("Date de naissance");
     const expected=normalizedDate(p.dateNaissance);
-    if(date&&expected&&!date.value){
+    if(date&&expected&&!date.value&&!manuallyEditedBirthFields.has(date)){
       const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;
       setter.call(date,expected);
       date.dispatchEvent(new Event("input",{bubbles:true}));
