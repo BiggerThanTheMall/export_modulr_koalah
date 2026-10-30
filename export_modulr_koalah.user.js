@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.4.8
+// @version      0.4.9
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -57,7 +57,9 @@
     for(const block of blocks){
       const ps=block.querySelectorAll("p");
       if(ps.length<2||norm(ps[0].textContent).replace(/\s*:\s*$/,"")!=="date de naissance")continue;
-      const value=normalizedBirthDate(ps[1].textContent);
+      const dateNode=ps[1].cloneNode(true);
+      dateNode.querySelectorAll(".modulr-age-badge").forEach(badge=>badge.remove());
+      const value=normalizedBirthDate(dateNode.textContent);
       if(value)return value;
     }
     for(const input of doc.querySelectorAll("input")){
