@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.4.7
+// @version      0.4.8
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -225,12 +225,13 @@
 
     const overlay=document.createElement("div");
     overlay.id="ltoa-k-overlay";
-    overlay.innerHTML='<div id="ltoa-k-modal"><div class="ltoa-modal-head"><img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><div><h2>Export vers KOALAH</h2><p>Contrôlez les données avant leur transfert</p></div></div><h3>Client principal</h3><div class="ltoa-grid"><div><b>Identité</b><br>'+esc(principal.civilite)+' '+esc(principal.prenom)+' '+esc(principal.nom)+'</div><div><b>Naissance</b><br>'+esc(principal.dateNaissance||"Non renseignée")+' '+esc(principal.lieuNaissance||"")+'</div><div><b>Coordonnées</b><br>'+esc(principal.telephone||"—")+'<br>'+esc(principal.email||"—")+'</div><div><b>Adresse</b><br>'+esc(principal.adresse||"—")+'<br>'+esc(principal.codePostal)+' '+esc(principal.ville)+'</div></div><h3>Informations à compléter</h3><div class="ltoa-extra"><label>Lieu de naissance <input id="ltoa-naissance" type="text" placeholder="Ville de naissance" value="'+esc(principal.lieuNaissance||"") +'"><small>Récupéré de ModulR, modifiable avant export</small></label><label>Pays de rapatriement <input id="ltoa-pays" type="text" placeholder="À renseigner" value="'+esc(principal.paysRapatriement||"")+'"><small>Détection dans les descriptions ModulR, modifiable</small></label><label>Assuré au cours des 12 derniers mois ? <select id="ltoa-12mois"><option value="">À préciser</option><option value="Oui" '+(principal.assure12Mois==="Oui"?"selected":"")+'>Oui</option><option value="Non" '+(principal.assure12Mois==="Non"?"selected":"")+'>Non</option></select><small>Choix manuel si description inconnue</small></label></div><h3>Type Koalah</h3><label style="margin-right:24px"><input type="radio" name="ltoa-type" value="Individuel" '+(family.length?"":"checked")+'> Individuel</label><label><input type="radio" name="ltoa-type" value="Famille" '+(family.length?"checked":"")+'> Famille</label><div id="ltoa-family"><h3>Famille détectée dans Modulr</h3>'+familyHtml+'</div><p class="ltoa-warn">Les champs spécifiques au devis Koalah absents de Modulr resteront à vérifier dans Koalah.</p><div class="ltoa-actions"><button id="ltoa-cancel">Annuler</button><button id="ltoa-send" class="ltoa-primary">Continuer vers Koalah</button></div></div>';
+    overlay.innerHTML='<div id="ltoa-k-modal"><div class="ltoa-modal-head"><img alt="" src="https://plateforme.ltoa-assurances.fr/brand/koalah/koalah-mark.png"><div><h2>Export vers KOALAH</h2><p>Contrôlez les données avant leur transfert</p></div></div><h3>Client principal</h3><div class="ltoa-grid"><div><b>Identité</b><br>'+esc(principal.civilite)+' '+esc(principal.prenom)+' '+esc(principal.nom)+'</div><div><b>Naissance</b><br>'+esc(principal.dateNaissance||"Non renseignée")+' '+esc(principal.lieuNaissance||"")+'</div><div><b>Coordonnées</b><br>'+esc(principal.telephone||"—")+'<br>'+esc(principal.email||"—")+'</div><div><b>Adresse</b><br>'+esc(principal.adresse||"—")+'<br>'+esc(principal.codePostal)+' '+esc(principal.ville)+'</div></div><h3>Informations à compléter</h3><div class="ltoa-extra"><label>Date de naissance du souscripteur <input id="ltoa-date-naissance" type="date" value="'+esc(principal.dateNaissance||"")+'" required><small>Vérifiez la date de la fiche principale ModulR avant export</small></label><label>Lieu de naissance <input id="ltoa-naissance" type="text" placeholder="Ville de naissance" value="'+esc(principal.lieuNaissance||"") +'"><small>Récupéré de ModulR, modifiable avant export</small></label><label>Pays de rapatriement <input id="ltoa-pays" type="text" placeholder="À renseigner" value="'+esc(principal.paysRapatriement||"")+'"><small>Détection dans les descriptions ModulR, modifiable</small></label><label>Assuré au cours des 12 derniers mois ? <select id="ltoa-12mois"><option value="">À préciser</option><option value="Oui" '+(principal.assure12Mois==="Oui"?"selected":"")+'>Oui</option><option value="Non" '+(principal.assure12Mois==="Non"?"selected":"")+'>Non</option></select><small>Choix manuel si description inconnue</small></label></div><h3>Type Koalah</h3><label style="margin-right:24px"><input type="radio" name="ltoa-type" value="Individuel" '+(family.length?"":"checked")+'> Individuel</label><label><input type="radio" name="ltoa-type" value="Famille" '+(family.length?"checked":"")+'> Famille</label><div id="ltoa-family"><h3>Famille détectée dans Modulr</h3>'+familyHtml+'</div><p class="ltoa-warn">Les champs spécifiques au devis Koalah absents de Modulr resteront à vérifier dans Koalah.</p><div class="ltoa-actions"><button id="ltoa-cancel">Annuler</button><button id="ltoa-send" class="ltoa-primary">Continuer vers Koalah</button></div></div>';
     document.body.appendChild(overlay);
 
     const refresh=()=>{ const type=overlay.querySelector('input[name="ltoa-type"]:checked').value; overlay.querySelector("#ltoa-family").style.display=type==="Famille"?"block":"none"; };
     overlay.querySelectorAll('input[name="ltoa-type"]').forEach(r=>r.addEventListener("change",refresh)); refresh();
-    const updateExtra=()=>{for(const el of [overlay.querySelector("#ltoa-naissance"),overlay.querySelector("#ltoa-pays"),overlay.querySelector("#ltoa-12mois")]){el.classList.toggle("ltoa-complete",!!clean(el.value));el.classList.toggle("ltoa-missing",!clean(el.value));}};
+    const updateExtra=()=>{for(const el of [overlay.querySelector("#ltoa-date-naissance"),overlay.querySelector("#ltoa-naissance"),overlay.querySelector("#ltoa-pays"),overlay.querySelector("#ltoa-12mois")]){el.classList.toggle("ltoa-complete",!!clean(el.value));el.classList.toggle("ltoa-missing",!clean(el.value));}};
+    overlay.querySelector("#ltoa-date-naissance").addEventListener("input",updateExtra);
     overlay.querySelector("#ltoa-naissance").addEventListener("input",updateExtra);
     overlay.querySelector("#ltoa-pays").addEventListener("input",updateExtra);
     overlay.querySelector("#ltoa-12mois").addEventListener("change",updateExtra);
@@ -238,6 +239,9 @@
     overlay.querySelector("#ltoa-cancel").onclick=()=>overlay.remove();
     overlay.querySelector("#ltoa-send").onclick=async()=>{
       const typeContrat=overlay.querySelector('input[name="ltoa-type"]:checked').value;
+      const birthInput=overlay.querySelector("#ltoa-date-naissance");
+      principal.dateNaissance=normalizedBirthDate(birthInput.value);
+      if(!principal.dateNaissance){birthInput.focus();updateExtra();alert("Renseignez une date de naissance valide pour le souscripteur. Aucune date ne sera inventée.");return;}
       principal.lieuNaissance=clean(overlay.querySelector("#ltoa-naissance").value);
       if(!principal.lieuNaissance){overlay.querySelector("#ltoa-naissance").focus();updateExtra();return;}
       principal.paysRapatriement=clean(overlay.querySelector("#ltoa-pays").value);
@@ -392,7 +396,6 @@
     if(el.matches("input[type=checkbox],input[type=radio]"))return el.checked?el.value:"";
     return el.matches("input,select,textarea")?clean(el.value):clean(el.textContent||"");
   }
-  const initializedBirthFields=new WeakSet();
   const manuallyEditedBirthFields=new WeakSet();
   document.addEventListener("input",event=>{
     if(event.isTrusted&&event.target?.matches?.("input")&&event.target===field("Date de naissance"))manuallyEditedBirthFields.add(event.target);
@@ -404,11 +407,11 @@
     const converted=isBirth?normalizedDate(value):(el.type==="date"?normalizedDate(value):value);
     if(!converted)return false;
     if(isBirth){
+      // KOALAH may prefill today's date. It is NOT a valid import from ModulR.
+      // Replace that default with the verified source date, without overwriting user edits.
       if(manuallyEditedBirthFields.has(el))return valueOf(el)===converted;
-      if(initializedBirthFields.has(el))return valueOf(el)===converted;
-      initializedBirthFields.add(el);
       if(valueOf(el)===converted)return true;
-    }else if(valueOf(el))return true; // Never overwrite manual corrections.
+    }else if(valueOf(el))return true;
     setNative(el,converted);
     return valueOf(el)===converted;
   }
@@ -469,19 +472,18 @@
     // Change one React-controlled field per render to avoid stale state resets.
     selectedCivilite(p.civilite);
     await sleep(100);
-    for(const [label,value] of [["Nom",p.nom],["Prénom",p.prenom],["Date de naissance",p.dateNaissance],["Lieu de naissance",p.lieuNaissance]]){
+    for(const [label,value] of [["Nom",p.nom],["Prénom",p.prenom],["Lieu de naissance",p.lieuNaissance]]){
       const el=field(label);
       if(el&&!valueOf(el)&&value){writeField(label,value);await sleep(150);}
     }
-    const date=field("Date de naissance");
+    // Always correct KOALAH's default birth date, even when already populated.
+    // React can rerender the input; subsequent passes reconcile the expected source date.
     const expected=normalizedDate(p.dateNaissance);
-    if(date&&expected&&!date.value&&!manuallyEditedBirthFields.has(date)){
-      const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;
-      setter.call(date,expected);
-      date.dispatchEvent(new Event("input",{bubbles:true}));
-      date.dispatchEvent(new Event("change",{bubbles:true}));
+    if(expected){
+      writeField("Date de naissance",expected);
       await sleep(200);
     }
+
   }
   function stepOneMissing(){
     const result=[];
@@ -640,7 +642,13 @@
       const step=wizardStep();
       if(!step){showPause("Formulaire KOALAH en cours de chargement.");return;}
       wizardState.step=step;
-      if(step===1)await fillStep1(payload.principal);
+      if(step===1){
+          if(!normalizedBirthDate(payload.principal.dateNaissance)){
+            showPause("Date de naissance du souscripteur absente ou invalide dans ModulR : import suspendu. Ne pas utiliser la date du jour.");
+            return;
+          }
+          await fillStep1(payload.principal);
+        }
       if(step===2)fillStep2(payload.principal);
       if(step===3){
         const selected=await fillStep3(payload);
@@ -648,6 +656,11 @@
         return;
       }
       const missing=step===1?stepOneMissing():requiredMissing();
+      if(step===1){
+        const actual=normalizedBirthDate(valueOf(field("Date de naissance")));
+        const expected=normalizedBirthDate(payload.principal.dateNaissance);
+        if(actual!==expected){showPause("Date de naissance KOALAH différente de ModulR : passage bloqué. Vérifiez la saisie.");return;}
+      }
       if(missing.length){
         showPause("Étape "+step+" : renseigne "+missing.join(", ")+". La reprise est automatique après saisie.");
         return;
