@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LTOA - Export Modulr vers Koalah
 // @namespace    https://ltoa-assurances.fr/
-// @version      0.4.10
+// @version      0.4.11
 // @description  Export d'une fiche client Modulr vers Koalah avec contrôle Individuel/Famille.
 // @match        https://courtage.modulr.fr/*
 // @match        https://plateforme.ltoa-assurances.fr/*
@@ -9,7 +9,8 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_addValueChangeListener
-// @updateURL    none
+// @updateURL    https://raw.githubusercontent.com/BiggerThanTheMall/export_modulr_koalah/main/export_modulr_koalah.user.js
+// @downloadURL  https://raw.githubusercontent.com/BiggerThanTheMall/export_modulr_koalah/main/export_modulr_koalah.user.js
 // @run-at       document-idle
 // ==/UserScript==
 
