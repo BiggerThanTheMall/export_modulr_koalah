@@ -24,29 +24,18 @@ Koalah conserve sa logique native de tarification.
 
 On valide d’abord le mapping réel des champs du formulaire Koalah sur quelques dossiers avant d’activer un envoi automatique complet.
 
-## Installation
+## Installation et mises à jour
 
-Installer dans Tampermonkey :
+Le dépôt est privé. Les anciennes URL brutes renvoient HTTP 404 sans authentification et ne permettent pas une mise à jour automatique fiable dans Tampermonkey.
 
-`export_modulr_koalah.user.js`
+1. Se connecter à GitHub avec un compte autorisé sur ce dépôt.
+2. Ouvrir [export_modulr_koalah.user.js](https://github.com/BiggerThanTheMall/export_modulr_koalah/blob/main/export_modulr_koalah.user.js) et copier tout son contenu.
+3. Dans Tampermonkey, ouvrir le script KOALAH existant, ou créer un nouveau script pour une première installation.
+4. Remplacer tout le contenu et enregistrer avec `Ctrl + S`.
+5. Recharger Modulr et Koalah.
 
-## Mise à jour automatique
-
-Le userscript contient déjà :
-
-- `@updateURL`
-- `@downloadURL`
-
-pointant vers :
-
-`https://raw.githubusercontent.com/BiggerThanTheMall/export_modulr_koalah/main/export_modulr_koalah.user.js`
-
-### Attention dépôt privé
-
-Le dépôt GitHub est privé. Une URL `raw.githubusercontent.com` privée n’est pas toujours exploitable par le mécanisme d’auto-update Tampermonkey sans authentification.
-
-Si Tampermonkey renvoie `404` pendant la vérification de mise à jour, il faudra exposer uniquement le fichier `.user.js` via une URL interne stable ou un endpoint dédié accessible au navigateur, tout en laissant le dépôt privé.
+Depuis la version 0.4.10, `@updateURL none` désactive les vérifications automatiques vers l'adresse privée qui renvoyait 404. Les mises à jour restent manuelles tant qu'une adresse de distribution stable et accessible à Tampermonkey n'est pas configurée. Aucun jeton GitHub ne doit être ajouté aux URL du script.
 
 ## Version
 
-`0.1.0`
+`0.4.10`
